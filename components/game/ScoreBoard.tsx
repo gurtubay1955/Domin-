@@ -329,7 +329,7 @@ export default function ScoreBoard({
 
                             return (
                                 <>
-                                    <div className="flex justify-center items-end gap-6 mb-8 relative h-40">
+                                    <div className="flex justify-center items-end gap-12 mb-8 relative h-48">
                                         {/* SINGLE ZAPATO */}
                                         {zapateroType === 'single' && (
                                             <motion.div
@@ -339,47 +339,39 @@ export default function ScoreBoard({
                                             >
                                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                                 <img
-                                                    src="/zapato_unico.png"
+                                                    src="/zapato_sencillo.png"
                                                     alt="Zapato Sencillo"
                                                     className="w-48 h-auto drop-shadow-[0_0_20px_rgba(255,215,0,0.8)]"
                                                 />
                                             </motion.div>
                                         )}
 
-                                        {/* DOUBLE ZAPATO (Composed of two single transparent shoes) */}
+                                        {/* DOUBLE ZAPATO - Uses the dedicated double shoe image */}
                                         {zapateroType === 'double' && (
                                             <motion.div
-                                                className="relative w-64 h-40 flex items-center justify-center mt-4"
-                                                animate={{ y: [0, -15, 0] }}
+                                                className="flex flex-col items-center"
+                                                animate={{ y: [0, -10, 0] }}
                                                 transition={{ duration: 1.5, repeat: Infinity, delay: 0.2 }}
                                             >
-                                                {/* Shoe 1 */}
+                                                {/* eslint-disable-next-line @next/next/no-img-element */}
                                                 <img
-                                                    src="/zapato_unico.png"
-                                                    alt="Zapato Izq"
-                                                    className="absolute left-0 top-0 w-48 h-auto drop-shadow-[0_0_20px_rgba(255,215,0,0.8)] -rotate-12 z-0"
-                                                />
-                                                {/* Shoe 2 */}
-                                                <img
-                                                    src="/zapato_unico.png"
-                                                    alt="Zapato Der"
-                                                    className="absolute right-0 top-4 w-48 h-auto drop-shadow-[0_0_20px_rgba(255,215,0,0.8)] rotate-12 z-10 transform scale-x-[-1]"
+                                                    src="/zapato_doble.png"
+                                                    alt="Zapato Doble"
+                                                    className="w-64 h-auto drop-shadow-[0_0_20px_rgba(255,215,0,0.8)]"
                                                 />
                                             </motion.div>
                                         )}
 
-                                        {/* TROPHY CENTER */}
-                                        {zapateroType === 'none' && (
-                                            <motion.div
-                                                animate={{
-                                                    y: [0, -10, 0],
-                                                    rotate: [0, 5, -5, 0]
-                                                }}
-                                                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                                            >
-                                                <Trophy className="text-[#FFD700] drop-shadow-[0_0_25px_rgba(255,215,0,0.5)]" size={120} />
-                                            </motion.div>
-                                        )}
+                                        {/* TROPHY CENTER - Always visible but separated */}
+                                        <motion.div
+                                            animate={{
+                                                y: [0, -10, 0],
+                                                rotate: [0, 5, -5, 0]
+                                            }}
+                                            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                                        >
+                                            <Trophy className="text-[#FFD700] drop-shadow-[0_0_25px_rgba(255,215,0,0.5)]" size={120} />
+                                        </motion.div>
                                     </div>
 
                                     <h2 className={`text-5xl font-black mb-8 tracking-tighter italic ${zapateroType !== 'none' ? "text-[#FFD700] drop-shadow-[0_0_15px_rgba(255,215,0,0.5)]" : "text-white"}`}>
