@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import { Trophy, Medal, ArrowLeft, Save, ShieldCheck, RefreshCw } from "lucide-react";
 import { archiveTournament } from "@/lib/tournamentService";
 import { useTournamentStore } from "@/lib/store"; // Quantum Store
+import PinGuard from "@/components/PinGuard"; // Guard
 
 // --- Types ---
 interface TeamStats {
@@ -151,8 +152,9 @@ export default function ResultsPage() {
                         <ArrowLeft size={20} /> Volver a la Mesa
                     </a>
 
-                    <Trophy size={64} className="text-[#FFD700] drop-shadow-[0_0_15px_rgba(255,215,0,0.5)]" />
-                    <h1 className="text-4xl font-bold mb-2">Tabla de Posiciones</h1>
+                    {/* 1. Trophy Larger (80px) */}
+                    <Trophy size={80} className="text-[#FFD700] drop-shadow-[0_0_20px_rgba(255,215,0,0.6)]" />
+                    <h1 className="text-5xl font-bold mb-2">Tabla de Posiciones</h1>
                     <h2 className="text-4xl font-bold text-[#A5D6A7] uppercase tracking-wide opacity-80">RESULTADOS FINALES</h2>
                 </div>
 
@@ -197,16 +199,20 @@ export default function ResultsPage() {
                                         ))}
                                     </div>
 
-                                    {/* STATS */}
-                                    <div className="flex flex-col items-center md:items-end">
-                                        <div className="text-6xl md:text-7xl font-black text-[#A5D6A7] leading-none mb-2 drop-shadow-md">
+                                    {/* STATS (CENTERED & SPACED) */}
+                                    <div className="flex flex-col items-center md:items-center min-w-[200px]">
+                                        {/* 2. V-D Centered */}
+                                        <div className="text-6xl md:text-7xl font-black text-[#A5D6A7] leading-none mb-3 drop-shadow-md text-center">
                                             {team.wins}V - {team.losses}D
                                         </div>
-                                        <div className="text-2xl font-bold font-mono opacity-80 mt-1 flex gap-4 md:block md:gap-0">
-                                            <span>PG:{team.pointsScored}</span>
-                                            <span className="md:hidden">-</span>
-                                            <span>PP:{team.pointsAllowed}</span>
-                                            <span className="block w-full md:inline text-center md:text-right mt-1 md:mt-0 md:ml-2 text-[#FDFBF7]">
+                                        {/* 2. Spaced PG / PP */}
+                                        <div className="text-2xl font-bold font-mono opacity-80 flex flex-col items-center gap-1">
+                                            <div className="flex gap-4">
+                                                <span>PG: {team.pointsScored}</span>
+                                                <span className="opacity-50">|</span>
+                                                <span>PP: {team.pointsAllowed}</span>
+                                            </div>
+                                            <span className="text-[#FDFBF7] mt-1">
                                                 ({team.pointDiff > 0 ? "+" : ""}{team.pointDiff})
                                             </span>
                                         </div>
@@ -222,20 +228,29 @@ export default function ResultsPage() {
 
                     {/* Archive Button */}
                     <div>
-                        <p className="opacity-80 text-xl font-medium mb-6">¿Terminó el torneo?</p>
-                        <button
-                            onClick={handleArchive}
-                            disabled={isArchiving || archivedSuccess}
-                            className={`
-                                px-10 py-5 rounded-2xl font-bold shadow-xl flex items-center justify-center gap-3 mx-auto transition-all text-xl
-                                ${archivedSuccess
-                                    ? "bg-[#81C784] text-[#1B5E20] cursor-default"
-                                    : "bg-white/10 hover:bg-white/20 text-white"}
-                            `}
+                        {/* 3. Larger Text */}
+                        <p className="opacity-80 text-3xl font-bold mb-6">¿Terminó el torneo?</p>
+
+                        {/* 4. Protected Archive */}
+                        <PinGuard
+                            onVerify={handleArchive}
+                            title="Archivar Torneo"
+                            description="Se requiere autorización para guardar los resultados finales."
                         >
-                            {archivedSuccess ? <ShieldCheck size={28} /> : <Save size={28} />}
-                            {archivedSuccess ? "Resultados Archivados" : (isArchiving ? "Guardando..." : "Archivar Torneo")}
-                        </button>
+                            <button
+                                disabled={isArchiving || archivedSuccess}
+                                className={`
+                                    px-10 py-5 rounded-2xl font-bold shadow-xl flex items-center justify-center gap-3 mx-auto transition-all text-xl
+                                    ${archivedSuccess
+                                        ? "bg-[#81C784] text-[#1B5E20] cursor-default"
+                                        : "bg-white/10 hover:bg-white/20 text-white"}
+                                `}
+                            >
+                                {archivedSuccess ? <ShieldCheck size={28} /> : <Save size={28} />}
+                                {archivedSuccess ? "Resultados Archivados" : (isArchiving ? "Guardando..." : "Guardar Resultados")}
+                            </button>
+                        </PinGuard>
+
                         {archivedSuccess && <p className="text-lg text-[#A5D6A7] mt-3 font-medium">Los datos están seguros en Supabase.</p>}
                     </div>
 
@@ -243,13 +258,23 @@ export default function ResultsPage() {
 
                     {/* NEW TOURNAMENT BUTTON (RESET) */}
                     <div>
-                        <button
-                            onClick={handleNewTournament}
-                            className="text-[#EF9A9A] hover:text-white hover:bg-[#EF9A9A]/20 px-8 py-4 rounded-xl transition-all flex items-center gap-3 mx-auto text-lg uppercase tracking-widest border border-transparent hover:border-[#EF9A9A]/20 font-bold"
+                        {/* 5. Protected Reset */}
+                        <PinGuard
+                            onVerify={() => {
+                                clearTournament();
+                                router.push("/"); // Direct to home (setup config)
+                            }}
+                            title="Reset Total"
+                            description="⚠️ ¿Borrar todo e iniciar nueva jornada?"
                         >
-                            <RefreshCw size={24} />
-                            Iniciar Nueva Jornada (Reset)
-                        </button>
+                            <button
+                                className="text-[#EF9A9A] hover:text-white hover:bg-[#EF9A9A]/20 px-8 py-4 rounded-xl transition-all flex items-center gap-3 mx-auto text-lg uppercase tracking-widest border border-transparent hover:border-[#EF9A9A]/20 font-bold"
+                            >
+                                <RefreshCw size={24} />
+                                Iniciar Nueva Jornada (Reset)
+                            </button>
+                        </PinGuard>
+
                         <p className="text-xl opacity-60 mt-4 font-bold leading-relaxed">
                             Esto borrará todos los datos del dispositivo
                             <br />
