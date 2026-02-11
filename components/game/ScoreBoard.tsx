@@ -19,6 +19,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, Medal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTournamentStore } from "@/lib/store"; // Quantum Store
+import { playClick, playVictory, playZapatero } from "@/lib/soundService";
 
 interface Hand {
     handNumber: number;
@@ -73,6 +74,19 @@ export default function ScoreBoard({
         if (totalA >= 100) setWinner('A');
         else if (totalB >= 100) setWinner('B');
     };
+
+    // EFFECT: Play victory sounds
+    useEffect(() => {
+        if (winner) {
+            playVictory();
+            const loserScore = winner === 'A' ? totalB : totalA;
+            if (loserScore === 0) {
+                playZapatero('double');
+            } else if (loserScore <= 50) {
+                playZapatero('single');
+            }
+        }
+    }, [winner, totalA, totalB]);
 
     /**
      * EFFECT: RESTORE SESSION & HANDS
@@ -129,6 +143,7 @@ export default function ScoreBoard({
      */
     const handleSaveAndExit = () => {
         if (!winner || isSaving) return;
+        playClick(); // Feedback for action
         setIsSaving(true);
 
         const currentTId = tournamentId || "legacy"; // Store fallback
