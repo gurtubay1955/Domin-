@@ -19,7 +19,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, Medal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTournamentStore } from "@/lib/store"; // Quantum Store
-import { ShoeIcon } from "@/components/icons/ShoeIcon"; // NEW FOOTWEAR
 
 interface Hand {
     handNumber: number;
@@ -330,19 +329,42 @@ export default function ScoreBoard({
 
                             return (
                                 <>
-                                    <div className="flex justify-center items-end gap-4 mb-6 relative">
-                                        {/* OPTIONAL ZAPATERO ICON LEFT */}
-                                        {(zapateroType === 'double' || zapateroType === 'single') && (
+                                    <div className="flex justify-center items-end gap-6 mb-6 relative">
+                                        {/* SINGLE ZAPATO */}
+                                        {zapateroType === 'single' && (
                                             <motion.div
                                                 className="flex flex-col items-center"
                                                 animate={{ y: [0, -10, 0] }}
                                                 transition={{ duration: 1.5, repeat: Infinity, delay: 0.2 }}
                                             >
-                                                <ShoeIcon size={64} className="text-[#FFD700] drop-shadow-[0_0_15px_rgba(255,215,0,0.6)]" />
-                                                <span className="text-[#FFD700] font-black tracking-widest text-sm mt-1">ZAPATO</span>
+                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                <img
+                                                    src="/zapato_sencillo.jpg"
+                                                    alt="Zapato Sencillo"
+                                                    className="w-32 h-auto drop-shadow-[0_0_15px_rgba(255,215,0,0.6)]"
+                                                />
+                                                <span className="text-[#FFD700] font-black tracking-widest text-xl mt-2">ZAPATO</span>
                                             </motion.div>
                                         )}
 
+                                        {/* DOUBLE ZAPATO */}
+                                        {zapateroType === 'double' && (
+                                            <motion.div
+                                                className="flex flex-col items-center"
+                                                animate={{ y: [0, -10, 0] }}
+                                                transition={{ duration: 1.5, repeat: Infinity, delay: 0.2 }}
+                                            >
+                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                <img
+                                                    src="/zapato_doble.png"
+                                                    alt="Zapato Doble"
+                                                    className="w-40 h-auto drop-shadow-[0_0_15px_rgba(255,215,0,0.6)]"
+                                                />
+                                                <span className="text-[#FFD700] font-black tracking-widest text-xl mt-2">ZAPATO</span>
+                                            </motion.div>
+                                        )}
+
+                                        {/* TROPHY CENTER */}
                                         <motion.div
                                             animate={{
                                                 y: [0, -10, 0],
@@ -352,23 +374,10 @@ export default function ScoreBoard({
                                         >
                                             <Trophy className="text-[#FFD700] drop-shadow-[0_0_25px_rgba(255,215,0,0.5)]" size={100} />
                                         </motion.div>
-
-                                        {/* ZAPATERO ICON RIGHT (Only for Double) */}
-                                        {zapateroType === 'double' && (
-                                            <motion.div
-                                                className="flex flex-col items-center"
-                                                animate={{ y: [0, -10, 0] }}
-                                                transition={{ duration: 1.5, repeat: Infinity, delay: 0.4 }}
-                                            >
-                                                <ShoeIcon size={64} className="text-[#FFD700] drop-shadow-[0_0_15px_rgba(255,215,0,0.6)] transform scale-x-[-1]" />
-                                                <span className="text-[#FFD700] font-black tracking-widest text-sm mt-1">ZAPATO</span>
-                                            </motion.div>
-                                        )}
                                     </div>
 
                                     <h2 className="text-5xl font-black text-white mb-8 tracking-tighter italic">
-                                        {zapateroType === 'double' ? "¡ZAPATERO DOBLE!" :
-                                            zapateroType === 'single' ? "¡ZAPATERO!" : "¡VICTORIA!"}
+                                        {zapateroType !== 'none' ? "¡ZAPATO!" : "¡VICTORIA!"}
                                     </h2>
                                 </>
                             );
