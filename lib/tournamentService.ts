@@ -147,3 +147,18 @@ export const archiveTournament = async (payload: any) => {
 
     return { success: !error, error: error?.message };
 };
+
+/**
+ * getCompletedTournamentsCount
+ * Returns the number of tournaments with status 'finished' + 'active' (history).
+ * Used to calculate the current "Jornada #".
+ */
+export const getCompletedTournamentsCount = async () => {
+    // Count ONLY finished tournaments to calculate next round number
+    const { count, error } = await supabase
+        .from('tournaments')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'finished');
+
+    return count || 0;
+};

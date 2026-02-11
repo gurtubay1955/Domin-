@@ -44,12 +44,22 @@ export default function Home() {
     setDisplayHost(hostName || "");
   }, [hostName]);
 
-  // Effect: Set the current date ON MOUNT
+  // Effect: Set the current date ON MOUNT & Fetch Round Number
+  const [roundNumber, setRoundNumber] = useState(1);
+
   useEffect(() => {
     const date = new Date();
     const options: Intl.DateTimeFormatOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
     const formatted = date.toLocaleDateString('es-ES', options);
     setCurrentDate(formatted.charAt(0).toUpperCase() + formatted.slice(1));
+
+    // Fetch Round Number from Cloud
+    import('@/lib/tournamentService').then(({ getCompletedTournamentsCount }) => {
+      getCompletedTournamentsCount().then(finishedCount => {
+        // Logic: Current Round = Finished Rounds + 1
+        setRoundNumber(finishedCount + 1);
+      });
+    });
   }, []);
 
   /**
@@ -115,7 +125,7 @@ export default function Home() {
                 onClick={() => setIsHostMenuOpen(!isHostMenuOpen)}
                 className="text-2xl md:text-4xl font-light tracking-widest text-[#A5D6A7]/80 uppercase hover:text-[#FDFBF7] transition-colors flex items-center gap-2 cursor-pointer mt-2"
               >
-                <span>Jornada 1 de 16 • Anfitrión: <span className="font-bold border-b-2 border-dashed border-[#A5D6A7]/50">{displayHost || "Seleccionar..."}</span></span>
+                <span>Jornada {roundNumber} de 16 • Anfitrión: <span className="font-bold border-b-2 border-dashed border-[#A5D6A7]/50">{displayHost || "Seleccionar..."}</span></span>
                 <ChevronDown size={32} className={`transform transition-transform ${isHostMenuOpen ? 'rotate-180' : ''}`} />
               </button>
 
@@ -150,7 +160,7 @@ export default function Home() {
               </div>
             </div>
 
-            <h2 className="text-5xl font-black mb-4 text-center text-white drop-shadow-lg">Jornada 1</h2>
+            <h2 className="text-5xl font-black mb-4 text-center text-white drop-shadow-lg">Jornada {roundNumber}</h2>
             <p className="text-3xl md:text-4xl font-bold opacity-90 mb-10 text-center uppercase tracking-wide text-[#A5D6A7]">
               {tournamentSummary}
             </p>
