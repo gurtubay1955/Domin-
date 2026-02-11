@@ -329,7 +329,7 @@ export default function ScoreBoard({
 
                             return (
                                 <>
-                                    <div className="flex justify-center items-end gap-6 mb-6 relative">
+                                    <div className="flex justify-center items-end gap-6 mb-8 relative h-40">
                                         {/* SINGLE ZAPATO */}
                                         {zapateroType === 'single' && (
                                             <motion.div
@@ -339,44 +339,50 @@ export default function ScoreBoard({
                                             >
                                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                                 <img
-                                                    src="/zapato_sencillo.jpg"
+                                                    src="/zapato_unico.png"
                                                     alt="Zapato Sencillo"
-                                                    className="w-32 h-auto drop-shadow-[0_0_15px_rgba(255,215,0,0.6)]"
+                                                    className="w-48 h-auto drop-shadow-[0_0_20px_rgba(255,215,0,0.8)]"
                                                 />
-                                                <span className="text-[#FFD700] font-black tracking-widest text-xl mt-2">ZAPATO</span>
                                             </motion.div>
                                         )}
 
-                                        {/* DOUBLE ZAPATO */}
+                                        {/* DOUBLE ZAPATO (Composed of two single transparent shoes) */}
                                         {zapateroType === 'double' && (
                                             <motion.div
-                                                className="flex flex-col items-center"
-                                                animate={{ y: [0, -10, 0] }}
+                                                className="relative w-64 h-40 flex items-center justify-center mt-4"
+                                                animate={{ y: [0, -15, 0] }}
                                                 transition={{ duration: 1.5, repeat: Infinity, delay: 0.2 }}
                                             >
-                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                {/* Shoe 1 */}
                                                 <img
-                                                    src="/zapato_doble.png"
-                                                    alt="Zapato Doble"
-                                                    className="w-40 h-auto drop-shadow-[0_0_15px_rgba(255,215,0,0.6)]"
+                                                    src="/zapato_unico.png"
+                                                    alt="Zapato Izq"
+                                                    className="absolute left-0 top-0 w-48 h-auto drop-shadow-[0_0_20px_rgba(255,215,0,0.8)] -rotate-12 z-0"
                                                 />
-                                                <span className="text-[#FFD700] font-black tracking-widest text-xl mt-2">ZAPATO</span>
+                                                {/* Shoe 2 */}
+                                                <img
+                                                    src="/zapato_unico.png"
+                                                    alt="Zapato Der"
+                                                    className="absolute right-0 top-4 w-48 h-auto drop-shadow-[0_0_20px_rgba(255,215,0,0.8)] rotate-12 z-10 transform scale-x-[-1]"
+                                                />
                                             </motion.div>
                                         )}
 
                                         {/* TROPHY CENTER */}
-                                        <motion.div
-                                            animate={{
-                                                y: [0, -10, 0],
-                                                rotate: [0, 5, -5, 0]
-                                            }}
-                                            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                                        >
-                                            <Trophy className="text-[#FFD700] drop-shadow-[0_0_25px_rgba(255,215,0,0.5)]" size={100} />
-                                        </motion.div>
+                                        {zapateroType === 'none' && (
+                                            <motion.div
+                                                animate={{
+                                                    y: [0, -10, 0],
+                                                    rotate: [0, 5, -5, 0]
+                                                }}
+                                                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                                            >
+                                                <Trophy className="text-[#FFD700] drop-shadow-[0_0_25px_rgba(255,215,0,0.5)]" size={120} />
+                                            </motion.div>
+                                        )}
                                     </div>
 
-                                    <h2 className="text-5xl font-black text-white mb-8 tracking-tighter italic">
+                                    <h2 className={`text-5xl font-black mb-8 tracking-tighter italic ${zapateroType !== 'none' ? "text-[#FFD700] drop-shadow-[0_0_15px_rgba(255,215,0,0.5)]" : "text-white"}`}>
                                         {zapateroType !== 'none' ? "¡ZAPATO!" : "¡VICTORIA!"}
                                     </h2>
                                 </>
