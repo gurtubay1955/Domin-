@@ -19,6 +19,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, Medal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTournamentStore } from "@/lib/store"; // Quantum Store
+import { ShoeIcon } from "@/components/icons/ShoeIcon"; // NEW FOOTWEAR
 
 interface Hand {
     handNumber: number;
@@ -313,23 +314,65 @@ export default function ScoreBoard({
                     <motion.div
                         initial={{ scale: 0.5, opacity: 0, rotate: -5 }}
                         animate={{ scale: 1, opacity: 1, rotate: 0 }}
-                        className="bg-gradient-to-b from-[#5e4b41] to-[#3E3129] border border-[#A5D6A7]/30 p-10 rounded-[3rem] max-w-md w-full text-center shadow-[0_0_80px_rgba(165,214,167,0.15)] relative overflow-hidden"
+                        className="bg-gradient-to-b from-[#5e4b41] to-[#3E3129] border border-[#A5D6A7]/30 p-8 rounded-[3rem] max-w-lg w-full text-center shadow-[0_0_80px_rgba(165,214,167,0.15)] relative overflow-hidden"
                     >
                         {/* Decorative glow */}
                         <div className="absolute -top-24 -left-24 w-48 h-48 bg-[#A5D6A7]/10 rounded-full blur-[80px]"></div>
                         <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-[#EF9A9A]/10 rounded-full blur-[80px]"></div>
 
-                        <motion.div
-                            animate={{
-                                y: [0, -10, 0],
-                                rotate: [0, 5, -5, 0]
-                            }}
-                            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                        >
-                            <Trophy className="mx-auto text-[#FFD700] mb-6 drop-shadow-[0_0_25px_rgba(255,215,0,0.5)]" size={100} />
-                        </motion.div>
+                        {/* ZAPATERO LOGIC CALCULATION */}
+                        {(() => {
+                            const loserScore = winner === 'A' ? totalB : totalA;
+                            let zapateroType: 'double' | 'single' | 'none' = 'none';
 
-                        <h2 className="text-5xl font-black text-white mb-8 tracking-tighter italic">¡VICTORIA!</h2>
+                            if (loserScore === 0) zapateroType = 'double';
+                            else if (loserScore <= 50) zapateroType = 'single';
+
+                            return (
+                                <>
+                                    <div className="flex justify-center items-end gap-4 mb-6 relative">
+                                        {/* OPTIONAL ZAPATERO ICON LEFT */}
+                                        {(zapateroType === 'double' || zapateroType === 'single') && (
+                                            <motion.div
+                                                className="flex flex-col items-center"
+                                                animate={{ y: [0, -10, 0] }}
+                                                transition={{ duration: 1.5, repeat: Infinity, delay: 0.2 }}
+                                            >
+                                                <ShoeIcon size={64} className="text-[#FFD700] drop-shadow-[0_0_15px_rgba(255,215,0,0.6)]" />
+                                                <span className="text-[#FFD700] font-black tracking-widest text-sm mt-1">ZAPATO</span>
+                                            </motion.div>
+                                        )}
+
+                                        <motion.div
+                                            animate={{
+                                                y: [0, -10, 0],
+                                                rotate: [0, 5, -5, 0]
+                                            }}
+                                            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                                        >
+                                            <Trophy className="text-[#FFD700] drop-shadow-[0_0_25px_rgba(255,215,0,0.5)]" size={100} />
+                                        </motion.div>
+
+                                        {/* ZAPATERO ICON RIGHT (Only for Double) */}
+                                        {zapateroType === 'double' && (
+                                            <motion.div
+                                                className="flex flex-col items-center"
+                                                animate={{ y: [0, -10, 0] }}
+                                                transition={{ duration: 1.5, repeat: Infinity, delay: 0.4 }}
+                                            >
+                                                <ShoeIcon size={64} className="text-[#FFD700] drop-shadow-[0_0_15px_rgba(255,215,0,0.6)] transform scale-x-[-1]" />
+                                                <span className="text-[#FFD700] font-black tracking-widest text-sm mt-1">ZAPATO</span>
+                                            </motion.div>
+                                        )}
+                                    </div>
+
+                                    <h2 className="text-5xl font-black text-white mb-8 tracking-tighter italic">
+                                        {zapateroType === 'double' ? "¡ZAPATERO DOBLE!" :
+                                            zapateroType === 'single' ? "¡ZAPATERO!" : "¡VICTORIA!"}
+                                    </h2>
+                                </>
+                            );
+                        })()}
 
                         <div className="flex flex-col gap-4 mb-8">
                             {/* WINNER */}
