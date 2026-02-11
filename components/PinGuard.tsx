@@ -3,6 +3,8 @@
 import React, { useState } from "react";
 import { Lock, X, Check } from "lucide-react";
 
+import ReactDOM from "react-dom";
+
 interface PinGuardProps {
     children: React.ReactElement<{ onClick?: (e: React.MouseEvent) => void }>;
     onVerify: () => void;
@@ -19,9 +21,15 @@ export default function PinGuard({
     const [isOpen, setIsOpen] = useState(false);
     const [pin, setPin] = useState("");
     const [error, setError] = useState(false);
+    const [mounted, setMounted] = useState(false);
 
     // Default PIN from user request
     const CORRECT_PIN = "1111";
+
+    // Ensure we only render portal on client
+    React.useEffect(() => {
+        setMounted(true);
+    }, []);
 
     const handleProtectedClick = (e: React.MouseEvent) => {
         // Stop any parent handlers
@@ -64,7 +72,7 @@ export default function PinGuard({
         <>
             {childWithClick}
 
-            {isOpen && (
+            {isOpen && mounted && ReactDOM.createPortal(
                 <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
                     {/* Backdrop */}
                     <div
@@ -170,7 +178,8 @@ export default function PinGuard({
                             </p>
                         )}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </>
     );
