@@ -13,7 +13,7 @@
  *    - If tournament configured -> "Soy Jugador" button is UNLOCKED.
  */
 
-import { Trophy, Users, PlayCircle, ChevronDown, RotateCcw } from 'lucide-react';
+import { Trophy, Users, PlayCircle, ChevronDown, RotateCcw, Check } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { OFFICIAL_PLAYERS } from '@/lib/constants';
 import { useTournamentStore } from "@/lib/store"; // Quantum Store
@@ -179,21 +179,33 @@ export default function Home() {
 
               <button
                 onClick={() => {
-                  if (displayHost) {
+                  if (displayHost && !isSetupComplete) {
                     const target = `/setup?host=${encodeURIComponent(displayHost)}`;
                     router.push(target);
                   }
                 }}
-                disabled={!displayHost}
+                disabled={!displayHost || isSetupComplete}
                 className={`
                   w-full py-8 text-3xl font-black rounded-2xl transition-all flex items-center justify-center gap-4 border-2
-                  ${displayHost
-                    ? "bg-white/5 text-white/90 hover:bg-white/10 hover:text-white hover:border-white/30 border-white/10 cursor-pointer"
-                    : "bg-black/20 text-white/20 border-white/5 cursor-not-allowed"}
+                  ${isSetupComplete
+                    ? "bg-[#A5D6A7]/20 text-[#A5D6A7] border-[#A5D6A7]/30 cursor-default"
+                    : displayHost
+                      ? "bg-white/5 text-white/90 hover:bg-white/10 hover:text-white hover:border-white/30 border-white/10 cursor-pointer"
+                      : "bg-black/20 text-white/20 border-white/5 cursor-not-allowed"
+                  }
                 `}
               >
-                <PlayCircle size={40} strokeWidth={2.5} className={displayHost ? "" : "opacity-20"} />
-                {displayHost ? "CONFIGURAR JORNADA" : "ELIGE ANFITRIÓN PRIMERO"}
+                {isSetupComplete ? (
+                  <>
+                    <Check size={40} strokeWidth={3} />
+                    JORNADA ACTIVA
+                  </>
+                ) : (
+                  <>
+                    <PlayCircle size={40} strokeWidth={2.5} className={displayHost ? "" : "opacity-20"} />
+                    {displayHost ? "CONFIGURAR JORNADA" : "ELIGE ANFITRIÓN PRIMERO"}
+                  </>
+                )}
               </button>
             </div>
 
