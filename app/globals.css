@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+:root {
+  --background: #4A3B32;
+  --foreground: #FDFBF7;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-hand: var(--font-patrick-hand);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-hand), "Comic Sans MS", cursive;
+}
+
+/* SAFELY Hide Next.js Dev Indicator ("The Black N") */
+#nextjs-dev-indicator,
+nextjs-portal {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
