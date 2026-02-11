@@ -321,7 +321,7 @@ export default function TableSelectPage() {
                                                 </div>
 
                                                 {/* Square Game Counter for Loser */}
-                                                <div className="flex-shrink-0 w-14 h-14 flex items-center justify-center rounded-lg border border-white/10 bg-black/20 text-white/40">
+                                                <div className="flex-shrink-0 w-14 h-14 flex items-center justify-center rounded-lg border border-[#A5D6A7]/30 bg-[#A5D6A7]/10 text-[#A5D6A7] ml-auto">
                                                     <span className="text-xl font-bold font-mono">
                                                         {loserGamesPlayed}/{totalExpectedPerPair}
                                                     </span>
