@@ -177,22 +177,24 @@ export default function Home() {
                 )}
               </a>
 
-              <PinGuard
-                onVerify={() => {
-                  // Pass the selected host to the setup page
-                  const target = displayHost ? `/setup?host=${encodeURIComponent(displayHost)}` : "/setup";
-                  router.push(target);
+              <button
+                onClick={() => {
+                  if (displayHost) {
+                    const target = `/setup?host=${encodeURIComponent(displayHost)}`;
+                    router.push(target);
+                  }
                 }}
-                title="Configuración Protegida"
-                description="Solo el anfitrión puede configurar la jornada."
+                disabled={!displayHost}
+                className={`
+                  w-full py-8 text-3xl font-black rounded-2xl transition-all flex items-center justify-center gap-4 border-2
+                  ${displayHost
+                    ? "bg-white/5 text-white/90 hover:bg-white/10 hover:text-white hover:border-white/30 border-white/10 cursor-pointer"
+                    : "bg-black/20 text-white/20 border-white/5 cursor-not-allowed"}
+                `}
               >
-                <button
-                  className="w-full py-8 bg-white/5 text-white/90 text-3xl font-black rounded-2xl hover:bg-white/10 hover:text-white transition-all flex items-center justify-center gap-4 border-2 border-white/10 group-hover:border-white/30"
-                >
-                  <PlayCircle size={40} strokeWidth={2.5} />
-                  CONFIGURAR JORNADA
-                </button>
-              </PinGuard>
+                <PlayCircle size={40} strokeWidth={2.5} className={displayHost ? "" : "opacity-20"} />
+                {displayHost ? "CONFIGURAR JORNADA" : "ELIGE ANFITRIÓN PRIMERO"}
+              </button>
             </div>
 
           </div>
