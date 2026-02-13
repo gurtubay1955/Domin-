@@ -34,6 +34,7 @@ interface TournamentState {
     tournamentId: string | null;
     hostName: string;
     pairs: Record<string, string[]>;
+    pairUuidMap: Record<string, number>; // 🗺️ V4.1: UUID -> Pair Number Map
     matchHistory: MatchRecord[];
     isSetupComplete: boolean;
 
@@ -43,8 +44,10 @@ interface TournamentState {
     _resetTimestamp: number | null; // Cuándo fue el último reset
 
     // Acciones principales
-    initializeTournament: (id: string, host: string, pairs: Record<string, string[]>) => void;
+    // Acciones principales
+    initializeTournament: (id: string, host: string, pairs: Record<string, string[]>, existingMatches?: MatchRecord[], pairUuidMap?: Record<string, number>) => void;
     addMatch: (match: MatchRecord) => void;
+    syncMatch: (match: MatchRecord) => void; // ☁️ V4.1: Recibir de la nube
     clearTournament: () => void;
     getPairNames: (pairId: number) => string[];
 
@@ -66,6 +69,7 @@ export const useTournamentStore = create<TournamentState>()(
             tournamentId: null,
             hostName: "",
             pairs: {},
+            pairUuidMap: {},
             matchHistory: [],
             isSetupComplete: false,
 
@@ -75,18 +79,19 @@ export const useTournamentStore = create<TournamentState>()(
             _resetTimestamp: null,
 
             // Acciones principales
-            initializeTournament: (id, host, pairs) => {
+            initializeTournament: (id, host, pairs, existingMatches = [], pairUuidMap = {}) => {
                 console.log("🌀 STORE: Inicializando torneo...", id);
                 set({
                     tournamentId: id,
                     hostName: host,
                     pairs: pairs,
-                    matchHistory: [],
+                    pairUuidMap: pairUuidMap,
+                    matchHistory: existingMatches, // V4.1: Hydrate history
                     isSetupComplete: true,
                     _hasHydrated: true // Marcar como hidratado
                 });
 
-                // ☁️ SYNC: Crear en Supabase (Side Effect)
+                // ☁️ SYNC: Crear en Supabase (Side Effect) - Solo si somos Host (lógica externa lo decide, pero upsert es seguro)
                 import('./tournamentService').then(({ createTournament }) => {
                     createTournament(id, host, pairs).then(res => {
                         if (res.success) console.log("✅ Torneo sincronizado en nube");
@@ -109,6 +114,20 @@ export const useTournamentStore = create<TournamentState>()(
                         });
                     });
 
+                    return { matchHistory: [...state.matchHistory, match] };
+                });
+            },
+
+            syncMatch: (match) => {
+                set((state) => {
+                    // Prevenir duplicados (CRÍTICO para eventos realtime)
+                    const exists = state.matchHistory.some(m => m.id === match.id);
+                    if (exists) {
+                        // console.log("🔄 SYNC: Match ya existe, ignorando.", match.id);
+                        return state;
+                    }
+
+                    console.log("📥 SYNC: Partida recibida de la nube", match.id);
                     return { matchHistory: [...state.matchHistory, match] };
                 });
             },

@@ -20,6 +20,9 @@ import { useTournamentStore } from "@/lib/store"; // Quantum Store
 import { useRouter } from 'next/navigation';
 import PinGuard from '@/components/PinGuard'; // Import Guard
 
+import { supabase } from '@/lib/supabaseClient';
+import { getActiveTournamentId, fetchTournamentConfig, fetchMatches } from '@/lib/tournamentService';
+
 export default function Home() {
   const router = useRouter();
   // State for dynamic UI elements
@@ -28,9 +31,13 @@ export default function Home() {
 
   // QUANTUM UPGRADE: Connect to Store
   const {
+    tournamentId, // Need this for subscription
     isSetupComplete,
     hostName,
     pairs,
+    pairUuidMap, // Need this for mapping
+    initializeTournament,
+    syncMatch, // Action to add external match
     nuclearReset // New Anti-Zombie Action
   } = useTournamentStore();
 
@@ -62,69 +69,120 @@ export default function Home() {
     });
   }, []);
 
-  // --- V4 SYNC UPGRADE ---
-  // Connect to the Cloud Matrix (Supabase) to listen for "Jornada Activa" signals.
-  const { initializeTournament, matchHistory } = useTournamentStore(); // Destructure actions
+  // --- V4.1 SYNC UPGRADE (FULL MATRIX) ---
 
+  // 1. GLOBAL STATE SYNC (App State)
+  // Listens for "Jornada Activa" signals.
   useEffect(() => {
-    // Dynamic import to keep main bundle light
-    Promise.all([
-      import('@/lib/supabaseClient'),
-      import('@/lib/tournamentService')
-    ]).then(([{ supabase }, { getActiveTournamentId, fetchTournamentConfig }]) => {
-
-      const handleSync = async (cloudId: string | null) => {
-        // 1. If NULL (No active tournament)
-        if (!cloudId) {
-          // If we have local data but cloud says "finished", we should reset.
-          // BUT: Prevent resetting if we are just viewing history.
-          // Strategy: Only reset if we think we are "Live" (isSetupComplete=true)
-          if (isSetupComplete && hostName) {
-            console.log("🌪️ SYNC: Tournament ended remotely. Triggering Nuclear Reset...");
-            nuclearReset();
-          }
-          return;
+    const handleSync = async (cloudId: string | null) => {
+      // A. If NULL (No active tournament)
+      if (!cloudId) {
+        if (isSetupComplete && hostName) {
+          console.log("🌪️ SYNC: Tournament ended remotely. Triggering Nuclear Reset...");
+          nuclearReset();
         }
+        return;
+      }
 
-        // 2. If NEW ID (Different from ours)
-        // Note: Host will have same ID locally, so this won't trigger for him
-        // unless he opens a second tab/device.
-        if (cloudId !== useTournamentStore.getState().tournamentId) {
-          console.log("📥 SYNC: Found new tournament!", cloudId);
-          const { success, config } = await fetchTournamentConfig(cloudId);
+      // B. If NEW ID (Different from ours)
+      if (cloudId !== useTournamentStore.getState().tournamentId) {
+        console.log("📥 SYNC: Found new tournament!", cloudId);
 
-          if (success && config) {
-            // HYDRATE!
-            initializeTournament(config.id, config.hostName, config.pairs);
-            // Optional: Toast notification
-            // alert("¡Jornada Sincronizada! Entrando...");
+        // 1. Fetch Config (Host + Pairs + IDs)
+        const { success: cSuccess, config } = await fetchTournamentConfig(cloudId);
+
+        if (cSuccess && config) {
+          // 2. Fetch History (Matches)
+          const { success: mSuccess, matches } = await fetchMatches(cloudId);
+
+          if (mSuccess && matches) {
+            // HYDRATE EVERYTHING!
+            // Pass config + matches + uuidMap
+            console.log(`💧 HYDRATING: ${matches.length} matches found.`);
+            initializeTournament(
+              config.id,
+              config.hostName,
+              config.pairs,
+              matches,
+              config.pairIds
+            );
           }
         }
-      };
+      }
+    };
 
-      // A. Check on Mount
-      getActiveTournamentId().then((res) => {
-        if (res.success && typeof res.activeId !== 'undefined') {
-          handleSync(res.activeId);
-        }
-      });
-
-      // B. Subscribe to Realtime Changes
-      const channel = supabase.channel('global_sync')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'app_state', filter: "key=eq.global_config" },
-          (payload: any) => {
-            console.log("🔔 SYNC SIGNAL RECEIVED:", payload);
-            const newId = payload.new?.value?.active_tournament_id;
-            handleSync(newId);
-          }
-        )
-        .subscribe();
-
-      return () => { supabase.removeChannel(channel); };
+    // Check on Mount
+    getActiveTournamentId().then((res) => {
+      if (res.success && typeof res.activeId !== 'undefined') {
+        handleSync(res.activeId);
+      }
     });
-  }, [isSetupComplete, hostName]); // Re-run if our status changes (e.g. after reset)
+
+    // Subscribe to Global Changes
+    const channel = supabase.channel('global_sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'app_state', filter: "key=eq.global_config" },
+        (payload: any) => {
+          console.log("🔔 SYNC SIGNAL RECEIVED:", payload);
+          const newId = payload.new?.value?.active_tournament_id;
+          handleSync(newId);
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [isSetupComplete, hostName]);
+
+
+  // 2. MATCH SYNC (Realtime Gameplay)
+  // Listens for NEW matches in the current tournament.
+  useEffect(() => {
+    // Check if tournamentId is available and not null/undefined
+    if (!tournamentId) {
+      console.log("🔌 SYNC: No tournamentId, skipping match subscription.");
+      return;
+    }
+
+    console.log("🔌 SYNC: Subscribing to matches for", tournamentId);
+
+    const channel = supabase.channel(`room_matches:${tournamentId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'matches', filter: `tournament_id=eq.${tournamentId}` },
+        (payload: any) => {
+          const m = payload.new;
+          console.log("⚽ MATCH GOAL:", m.id);
+
+          // MAP DB -> STORE using our mapped UUIDs
+          // We need to convert pair_a_id (UUID) -> 1 (Number)
+          const pairANum = pairUuidMap[m.pair_a_id] || 0;
+          const pairBNum = pairUuidMap[m.pair_b_id] || 0;
+
+          // Construct Record
+          const matchRecord = {
+            id: m.id,
+            tournamentId: m.tournament_id,
+            myPair: pairANum,
+            oppPair: pairBNum,
+            scoreMy: m.score_a,
+            scoreOpp: m.score_b,
+            oppNames: m.pair_b_names || ["?", "?"],
+            timestamp: m.timestamp,
+            handsMy: m.hands_a,
+            handsOpp: m.hands_b,
+            isZapatero: m.termination_type
+          };
+
+          // Sync to Store
+          syncMatch(matchRecord);
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+
+  }, [tournamentId, pairUuidMap, syncMatch]); // Re-subscribe if tournament or pairUuidMap changes
 
 
   /**
@@ -287,36 +345,34 @@ export default function Home() {
           </div>
         </div>
 
+
         {/* Footer Info */}
         <div className="flex flex-col items-center gap-6 opacity-40 text-xl text-center font-bold tracking-widest mt-8">
-          <div className="flex items-center gap-3">
-            <Users size={18} />
-            <span>GESTIÓN DE PAREJAS v2.2</span>
-          </div>
-
-          <div className="flex gap-6 mt-4">
-            <PinGuard
-              onVerify={handleResetClick}
-              title="Reset Nuclear"
-              description="¿Seguro? Se requiere autorización nivel Supervisor."
-            >
-              <button
-                className="p-4 bg-white/5 hover:bg-white/10 text-white/30 hover:text-red-400 rounded-full transition-all hover:scale-110 active:scale-95 group"
-                title="Resetear Jornada"
-              >
-                <RotateCcw size={32} className="group-hover:rotate-180 transition-transform duration-700" />
-              </button>
-            </PinGuard>
-            <a
-              href="/stats"
-              className="p-4 bg-white/5 hover:bg-white/10 text-[#FFD700]/50 hover:text-[#FFD700] rounded-full transition-all hover:scale-110 active:scale-95 group"
-              title="Estadísticas del Torneo"
-            >
-              <Trophy size={32} className="group-hover:animate-bounce transition-transform duration-700" />
-            </a>
-          </div>
+          <Users size={18} />
+          <span>SISTEMA V4.0 (SYNC)</span>
         </div>
 
+        <div className="flex gap-6 mt-4">
+          <PinGuard
+            onVerify={handleResetClick}
+            title="Reset Nuclear"
+            description="¿Seguro? Se requiere autorización nivel Supervisor."
+          >
+            <button
+              className="p-4 bg-white/5 hover:bg-white/10 text-white/30 hover:text-red-400 rounded-full transition-all hover:scale-110 active:scale-95 group"
+              title="Resetear Jornada"
+            >
+              <RotateCcw size={32} className="group-hover:rotate-180 transition-transform duration-700" />
+            </button>
+          </PinGuard>
+          <a
+            href="/stats"
+            className="p-4 bg-white/5 hover:bg-white/10 text-[#FFD700]/50 hover:text-[#FFD700] rounded-full transition-all hover:scale-110 active:scale-95 group"
+            title="Estadísticas del Torneo"
+          >
+            <Trophy size={32} className="group-hover:animate-bounce transition-transform duration-700" />
+          </a>
+        </div>
       </div>
 
       {/* CUSTOM RESET MODAL */}

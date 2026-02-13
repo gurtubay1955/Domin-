@@ -269,8 +269,11 @@ export const fetchTournamentConfig = async (tournamentId: string) => {
 
         // 3. Reconstruct Pairs Object: Record<string, string[]>
         const pairsMap: Record<string, string[]> = {};
+        const pairIds: Record<string, number> = {};
+
         pData.forEach((p: any) => {
             pairsMap[p.pair_number.toString()] = [p.player1_name, p.player2_name];
+            pairIds[p.id] = p.pair_number; // Map UUID -> pair_number
         });
 
         return {
@@ -278,7 +281,8 @@ export const fetchTournamentConfig = async (tournamentId: string) => {
             config: {
                 id: tData.id,
                 hostName: tData.host_name,
-                pairs: pairsMap
+                pairs: pairsMap,
+                pairIds: pairIds // Needed for Realtime Subscription
             }
         };
 
@@ -301,8 +305,57 @@ export const getActiveTournamentId = async () => {
             .single();
 
         if (error) return { success: false, error: error.message };
+
         return { success: true, activeId: data?.value?.active_tournament_id || null };
     } catch (e: any) {
         return { success: false, error: e.message }; // Fail safe
+    }
+};
+
+/**
+ * fetchMatches
+ * Retrieves all completed matches for a given tournament.
+ * Uses Relational Join to get Pair Numbers from IDs.
+ */
+export const fetchMatches = async (tournamentId: string) => {
+    try {
+        // Query with JOIN to get pair_numbers
+        const { data, error } = await supabase
+            .from('matches')
+            .select(`
+                *,
+                pair_a:pair_a_id ( pair_number ),
+                pair_b:pair_b_id ( pair_number )
+            `)
+            .eq('tournament_id', tournamentId)
+            .order('timestamp', { ascending: true });
+
+        if (error) throw error;
+
+        // Map DB -> Store MatchRecord
+        const matches: MatchRecord[] = (data || []).map((m: any) => ({
+            id: m.id,
+            tournamentId: m.tournament_id,
+
+            // Map joined fields safely
+            myPair: m.pair_a?.pair_number || 0,
+            oppPair: m.pair_b?.pair_number || 0,
+
+            scoreMy: m.score_a,
+            scoreOpp: m.score_b,
+            oppNames: m.pair_b_names || ["?", "?"], // We keep original names stored
+
+            // Stats
+            handsMy: m.hands_a,
+            handsOpp: m.hands_b,
+            isZapatero: m.termination_type,
+            timestamp: m.timestamp
+        }));
+
+        return { success: true, matches };
+
+    } catch (e: any) {
+        console.error("❌ SYNC ERROR (fetchMatches):", e);
+        return { success: false, error: e.message };
     }
 };
