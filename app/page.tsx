@@ -62,6 +62,71 @@ export default function Home() {
     });
   }, []);
 
+  // --- V4 SYNC UPGRADE ---
+  // Connect to the Cloud Matrix (Supabase) to listen for "Jornada Activa" signals.
+  const { initializeTournament, matchHistory } = useTournamentStore(); // Destructure actions
+
+  useEffect(() => {
+    // Dynamic import to keep main bundle light
+    Promise.all([
+      import('@/lib/supabaseClient'),
+      import('@/lib/tournamentService')
+    ]).then(([{ supabase }, { getActiveTournamentId, fetchTournamentConfig }]) => {
+
+      const handleSync = async (cloudId: string | null) => {
+        // 1. If NULL (No active tournament)
+        if (!cloudId) {
+          // If we have local data but cloud says "finished", we should reset.
+          // BUT: Prevent resetting if we are just viewing history.
+          // Strategy: Only reset if we think we are "Live" (isSetupComplete=true)
+          if (isSetupComplete && hostName) {
+            console.log("🌪️ SYNC: Tournament ended remotely. Triggering Nuclear Reset...");
+            nuclearReset();
+          }
+          return;
+        }
+
+        // 2. If NEW ID (Different from ours)
+        // Note: Host will have same ID locally, so this won't trigger for him
+        // unless he opens a second tab/device.
+        if (cloudId !== useTournamentStore.getState().tournamentId) {
+          console.log("📥 SYNC: Found new tournament!", cloudId);
+          const { success, config } = await fetchTournamentConfig(cloudId);
+
+          if (success && config) {
+            // HYDRATE!
+            initializeTournament(config.id, config.hostName, config.pairs);
+            // Optional: Toast notification
+            // alert("¡Jornada Sincronizada! Entrando...");
+          }
+        }
+      };
+
+      // A. Check on Mount
+      getActiveTournamentId().then((res) => {
+        if (res.success && typeof res.activeId !== 'undefined') {
+          handleSync(res.activeId);
+        }
+      });
+
+      // B. Subscribe to Realtime Changes
+      const channel = supabase.channel('global_sync')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'app_state', filter: "key=eq.global_config" },
+          (payload: any) => {
+            console.log("🔔 SYNC SIGNAL RECEIVED:", payload);
+            const newId = payload.new?.value?.active_tournament_id;
+            handleSync(newId);
+          }
+        )
+        .subscribe();
+
+      return () => { supabase.removeChannel(channel); };
+    });
+  }, [isSetupComplete, hostName]); // Re-run if our status changes (e.g. after reset)
+
+
   /**
    * GUARD: handlePlayerClick
    * Intercepts the click on "Soy Jugador".

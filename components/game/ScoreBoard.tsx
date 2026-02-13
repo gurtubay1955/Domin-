@@ -122,19 +122,39 @@ export default function ScoreBoard({
         setIsInitialized(true); // MARK AS READY TO SAVE
     }, []); // Run ONCE on mount, independent of props
 
-    // EFFECT: AUTO-SAVE HANDS
+    // EFFECT: AUTO-SAVE HANDS & LIVE BROADCAST
     useEffect(() => {
         if (!isInitialized) return; // WAIT FOR RESTORE
 
         if (config.pairA && config.pairB) {
+            // 1. Local Persistence
             const dataToSave = {
                 pairA: config.pairA,
                 pairB: config.pairB,
                 hands: hands
             };
             sessionStorage.setItem("activeMatch_hands", JSON.stringify(dataToSave));
+
+            // 2. Cloud Broadcast (Live Progress)
+            // Debounce slightly to avoid spamming on every keypress if we had one, 
+            // but here we update on 'hands' array change which happens on ENTER.
+            if (tournamentId) {
+                const timeoutId = setTimeout(() => {
+                    import('@/lib/tournamentService').then(({ updateLiveMatch }) => {
+                        updateLiveMatch(
+                            tournamentId,
+                            config.pairA!,
+                            config.pairB!,
+                            totalA,
+                            totalB,
+                            hands.length
+                        );
+                    });
+                }, 500);
+                return () => clearTimeout(timeoutId);
+            }
         }
-    }, [hands, config, isInitialized]);
+    }, [hands, config, isInitialized, tournamentId, totalA, totalB]);
 
     /**
      * handleSaveAndExit (CRITICAL)
@@ -161,7 +181,7 @@ export default function ScoreBoard({
             scoreOpp: totalB,
             oppNames: teamB,
             timestamp: timestamp,
-            // 📊 NEW STATS CALCULATION
+            // 📊 STATS & LIVE UPDATE
             handsMy: hands.filter(h => (h.pointsA || 0) > (h.pointsB || 0)).length,
             handsOpp: hands.filter(h => (h.pointsB || 0) > (h.pointsA || 0)).length,
             isZapatero: (() => {
@@ -174,6 +194,13 @@ export default function ScoreBoard({
 
         // ACTION: Dispatch to Store
         addMatch(newRecord);
+
+        // ☁️ LIVE: Cleanup (Remove "Playing" status)
+        import('@/lib/tournamentService').then(({ deleteLiveMatch }) => {
+            if (currentTId && config.pairA && config.pairB) {
+                deleteLiveMatch(currentTId, config.pairA, config.pairB);
+            }
+        });
 
         // CLEANUP: Remove active match so user isn't stuck in "Game Mode"
         localStorage.removeItem("activeMatch");

@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation";
 import { Users, AlertCircle, PlayCircle, History, Trophy } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTournamentStore } from "@/lib/store"; // Quantum Store
+import { supabase } from "@/lib/supabaseClient"; // Supabase Client for Live V3.1
 
 export default function TableSelectPage() {
     const router = useRouter();
@@ -182,52 +183,16 @@ export default function TableSelectPage() {
                             </p>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 gap-3">
-                            {availableOpponents.map(([numStr, names]) => {
-                                const pNum = parseInt(numStr);
-                                const isSelected = opponentPairNum === pNum;
-                                const gamesPlayed = getGamesPlayed(pNum);
-
-                                return (
-                                    <button
-                                        key={pNum}
-                                        onClick={() => setOpponentPairNum(pNum)}
-                                        className={`
-                                            relative flex items-center justify-between p-3 rounded-xl transition-all duration-300 border
-                                            ${isSelected
-                                                ? 'bg-[#A5D6A7] text-[#1B5E20] border-[#A5D6A7] scale-[1.02] shadow-lg'
-                                                : 'bg-white/5 hover:bg-white/10 border-white/5 text-white/80'}
-                                        `}
-                                    >
-                                        <div className="flex items-center gap-4 w-full">
-                                            {/* Names - Flexible Area */}
-                                            <div className="text-left flex-1 min-w-0">
-                                                <p className="font-bold text-3xl leading-snug truncate text-white">
-                                                    {names.join(" y ")}
-                                                </p>
-                                            </div>
-
-                                            {/* Game Counter - Square Box */}
-                                            <div className={`
-                                                flex-shrink-0 w-16 h-16 flex items-center justify-center rounded-lg border-2
-                                                ${isSelected
-                                                    ? 'border-[#1B5E20] bg-[#1B5E20]/10 text-[#1B5E20]'
-                                                    : 'border-white/10 bg-black/20 text-white/40'}
-                                            `}>
-                                                <span className="text-2xl font-bold font-mono">
-                                                    {gamesPlayed}/{totalExpectedPerPair}
-                                                </span>
-                                            </div>
-                                        </div>
-
-                                        {/* Selection Indicator (Subtle overlay) */}
-                                        {isSelected && (
-                                            <motion.div layoutId="check" className="absolute -top-1 -right-1 bg-[#1B5E20] w-4 h-4 rounded-full border-2 border-[#A5D6A7]" />
-                                        )}
-                                    </button>
-                                );
-                            })}
-                        </div>
+                        // LIVE MATCHES SUBSCRIPTION COMPONENT
+                        <LiveMatchesHandler
+                            tournamentId={tournamentId}
+                            availableOpponents={availableOpponents}
+                            opponentPairNum={opponentPairNum}
+                            setOpponentPairNum={setOpponentPairNum}
+                            myPairNum={myPairNum}
+                            totalExpectedPerPair={totalExpectedPerPair}
+                            getGamesPlayed={getGamesPlayed}
+                        />
                     )}
                 </div>
 
@@ -362,6 +327,140 @@ export default function TableSelectPage() {
                     </button>
                 )}
             </div>
+        </div>
+    );
+}
+
+/**
+ * LIVE MATCHES HANDLER COMPONENT (Extracted for better React Hooks compliance)
+ */
+function LiveMatchesHandler({
+    tournamentId,
+    availableOpponents,
+    opponentPairNum,
+    setOpponentPairNum,
+    myPairNum,
+    totalExpectedPerPair,
+    getGamesPlayed
+}: any) {
+    const [liveMatches, setLiveMatches] = useState<Record<string, { scoreA: number, scoreB: number, hand: number }>>({});
+
+    useEffect(() => {
+        if (!tournamentId) return;
+
+        console.log("📡 Subscribing to LIVE matches...");
+        const channel = supabase
+            .channel('live_scores')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'live_matches', filter: `tournament_id=eq.${tournamentId}` },
+                (payload) => {
+                    console.log("🔥 LIVE UPDATE:", payload);
+                    const fetchLiveMatches = async () => {
+                        const { data } = await supabase
+                            .from('live_matches')
+                            .select('*')
+                            .eq('tournament_id', tournamentId);
+
+                        if (data) {
+                            const map: Record<string, any> = {};
+                            data.forEach(m => {
+                                map[`${m.pair_a}-${m.pair_b}`] = { scoreA: m.score_a, scoreB: m.score_b, hand: m.hand_number };
+                            });
+                            setLiveMatches(map);
+                        }
+                    }
+                    fetchLiveMatches();
+                }
+            )
+            .subscribe();
+
+        const fetchLiveMatches = async () => {
+            const { data } = await supabase
+                .from('live_matches')
+                .select('*')
+                .eq('tournament_id', tournamentId);
+
+            if (data) {
+                const map: Record<string, any> = {};
+                data.forEach(m => {
+                    // Key: "min-max" pair IDs
+                    map[`${m.pair_a}-${m.pair_b}`] = { scoreA: m.score_a, scoreB: m.score_b, hand: m.hand_number };
+                });
+                setLiveMatches(map);
+            }
+        };
+
+        fetchLiveMatches();
+
+        return () => { supabase.removeChannel(channel); };
+    }, [tournamentId]);
+
+    return (
+        <div className="grid grid-cols-1 gap-3">
+            {availableOpponents.map(([numStr, names]: [string, string[]]) => {
+                const pNum = parseInt(numStr);
+                const isSelected = opponentPairNum === pNum;
+                const gamesPlayed = getGamesPlayed(pNum);
+
+                // Check active status
+                const activeMatch = Object.entries(liveMatches).find(([key]) => key.startsWith(`${pNum}-`) || key.endsWith(`-${pNum}`));
+
+                let liveBadge = null;
+                if (activeMatch) {
+                    const [key, data] = activeMatch;
+                    const [pA, pB] = key.split('-').map(Number);
+                    const isPairA = pNum === pA;
+                    const myScore = isPairA ? data.scoreA : data.scoreB;
+                    const oppScore = isPairA ? data.scoreB : data.scoreA;
+
+                    liveBadge = (
+                        <div className="absolute top-2 right-2 bg-red-500/90 text-white text-xs font-bold px-2 py-1 rounded-full animate-pulse shadow-lg z-20">
+                            JUGANDO: {myScore} - {oppScore}
+                        </div>
+                    );
+                }
+
+                return (
+                    <button
+                        key={pNum}
+                        onClick={() => setOpponentPairNum(pNum)}
+                        className={`
+                            relative flex items-center justify-between p-3 rounded-xl transition-all duration-300 border
+                            ${isSelected
+                                ? 'bg-[#A5D6A7] text-[#1B5E20] border-[#A5D6A7] scale-[1.02] shadow-lg'
+                                : 'bg-white/5 hover:bg-white/10 border-white/5 text-white/80'}
+                        `}
+                    >
+                        {liveBadge}
+
+                        <div className="flex items-center gap-4 w-full">
+                            {/* Names */}
+                            <div className="text-left flex-1 min-w-0">
+                                <p className="font-bold text-3xl leading-snug truncate text-white">
+                                    {names.join(" y ")}
+                                </p>
+                            </div>
+
+                            {/* Game Counter */}
+                            <div className={`
+                                flex-shrink-0 w-16 h-16 flex items-center justify-center rounded-lg border-2
+                                ${isSelected
+                                    ? 'border-[#1B5E20] bg-[#1B5E20]/10 text-[#1B5E20]'
+                                    : 'border-white/10 bg-black/20 text-white/40'}
+                            `}>
+                                <span className="text-2xl font-bold font-mono">
+                                    {gamesPlayed}/{totalExpectedPerPair}
+                                </span>
+                            </div>
+                        </div>
+
+                        {isSelected && (
+                            <motion.div layoutId="check" className="absolute -top-1 -right-1 bg-[#1B5E20] w-4 h-4 rounded-full border-2 border-[#A5D6A7]" />
+                        )}
+                    </button>
+                );
+            })}
         </div>
     );
 }

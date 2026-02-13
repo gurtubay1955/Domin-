@@ -83,18 +83,26 @@ function SetupContent() {
         // 1. Generate unique tournament ID (UUID for Supabase)
         const tId = generateUUID();
 
-        // 2. Quantum Store Initialization
-        // "The Store is the single source of truth"
-        // FIX: Use the actual currentHost (or empty if none)
-        useTournamentStore.getState().initializeTournament(tId, currentHost, pairs);
+        // 2. Quantum Store Initialization (Local)
+        // This is immediate for the Host
+        const finalHost = currentHost || "Anfitrión"; // Fallback
+        useTournamentStore.getState().initializeTournament(tId, finalHost, pairs);
 
-        // 3. Fallback Cleanup (Just in case)
+        // 3. V4 MULTIPLAYER SYNC: Publish Global Signal
+        // This wakes up all other clients
+        import('@/lib/tournamentService').then(({ setActiveTournament }) => {
+            setActiveTournament(tId).then(res => {
+                if (!res.success) alert("⚠️ Error al publicar Jornada. Revisa conexión.");
+            });
+        });
+
+        // 4. Fallback Cleanup (Just in case)
         localStorage.removeItem("activeMatch");
         sessionStorage.removeItem("activeMatch");
         // Legacy cleanup
         localStorage.removeItem("match_history");
 
-        console.log("Setup initialized via Store:", tId);
+        console.log("Setup initialized via Store & Cloud:", tId);
         router.push("/");
     };
 

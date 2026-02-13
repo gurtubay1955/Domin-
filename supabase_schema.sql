@@ -78,4 +78,41 @@ CREATE POLICY "Public Read Access" ON matches FOR SELECT USING (true);
 CREATE POLICY "Public Insert Access" ON players FOR INSERT WITH CHECK (true);
 CREATE POLICY "Public Insert Access" ON tournaments FOR INSERT WITH CHECK (true);
 CREATE POLICY "Public Insert Access" ON pairs FOR INSERT WITH CHECK (true);
-CREATE POLICY "Public Insert Access" ON matches FOR INSERT WITH CHECK (true);
+
+-- 6. LIVE MATCHES (Marcadores en Tiempo Real)
+-- Tabla volátil para mostrar "Jugando: 85-90"
+CREATE TABLE IF NOT EXISTS live_matches (
+    tournament_id UUID NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+    pair_a INTEGER NOT NULL, -- Número de pareja (menor)
+    pair_b INTEGER NOT NULL, -- Número de pareja (mayor)
+    score_a INTEGER DEFAULT 0,
+    score_b INTEGER DEFAULT 0,
+    hand_number INTEGER DEFAULT 1,
+    last_updated TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+    
+    PRIMARY KEY (tournament_id, pair_a, pair_b),
+    CONSTRAINT pair_order CHECK (pair_a < pair_b) -- Normalización forzada
+);
+
+ALTER TABLE live_matches ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public Read Access" ON live_matches FOR SELECT USING (true);
+CREATE POLICY "Public Insert Access" ON live_matches FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public Update Access" ON live_matches FOR UPDATE USING (true);
+
+-- 7. APP STATE (Singleton for Multiplayer Sync)
+-- "La Señal Maestra"
+CREATE TABLE IF NOT EXISTS app_state (
+    key TEXT PRIMARY KEY,
+    value JSONB, -- Flexible payload (e.g. { "active_tournament_id": "uuid" })
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+ALTER TABLE app_state ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Public Read Access" ON app_state FOR SELECT USING (true);
+CREATE POLICY "Public Update Access" ON app_state FOR UPDATE USING (true);
+CREATE POLICY "Public Insert Access" ON app_state FOR INSERT WITH CHECK (true);
+
+-- Seed with default null state
+INSERT INTO app_state (key, value) VALUES ('global_config', '{"active_tournament_id": null}'::jsonb) ON CONFLICT DO NOTHING;

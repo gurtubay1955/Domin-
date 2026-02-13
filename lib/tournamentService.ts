@@ -162,3 +162,147 @@ export const getCompletedTournamentsCount = async () => {
 
     return count || 0;
 };
+
+// --- REAL-TIME LIVE PROGRESS (V3.1) ---
+
+/**
+ * updateLiveMatch
+ * Updates the ephemeral score state in Supabase.
+ * Call this every time a hand is finished.
+ */
+export const updateLiveMatch = async (tournamentId: string, myPair: number, oppPair: number, scoreMy: number, scoreOpp: number, handNum: number) => {
+    // 1. Normalize Keys (Pair A always smaller)
+    const isASmaller = myPair < oppPair;
+    const pairA = isASmaller ? myPair : oppPair;
+    const pairB = isASmaller ? oppPair : myPair;
+    const scoreA = isASmaller ? scoreMy : scoreOpp;
+    const scoreB = isASmaller ? scoreOpp : scoreMy;
+
+    try {
+        const { error } = await supabase
+            .from('live_matches')
+            .upsert({
+                tournament_id: tournamentId,
+                pair_a: pairA,
+                pair_b: pairB,
+                score_a: scoreA,
+                score_b: scoreB,
+                hand_number: handNum,
+                last_updated: new Date().toISOString()
+            });
+
+        if (error) throw error;
+    } catch (e) {
+        // Silent fail for live updates, don't block gameplay
+        console.warn("⚠️ Live Update Failed:", e);
+    }
+};
+
+/**
+ * deleteLiveMatch
+ * Removes the live record when the match finishes (cleanup).
+ */
+export const deleteLiveMatch = async (tournamentId: string, myPair: number, oppPair: number) => {
+    const pairA = Math.min(myPair, oppPair);
+    const pairB = Math.max(myPair, oppPair);
+
+    try {
+        await supabase
+            .from('live_matches')
+            .delete()
+            .match({ tournament_id: tournamentId, pair_a: pairA, pair_b: pairB });
+    } catch (e) {
+        console.warn("⚠️ Live Delete Failed:", e);
+    }
+};
+
+
+// --- V4 MULTIPLAYER SYNC (Jornada Compartida) ---
+
+/**
+ * setActiveTournament
+ * Publishes the given tournament ID as the GLOBALLY ACTIVE tournament.
+ * Called by Host upon finishing setup.
+ */
+export const setActiveTournament = async (tournamentId: string) => {
+    console.log("🌍 SYNC: Setting active tournament:", tournamentId);
+    try {
+        const { error } = await supabase
+            .from('app_state')
+            .upsert({
+                key: 'global_config',
+                value: { active_tournament_id: tournamentId },
+                updated_at: new Date().toISOString()
+            });
+
+        if (error) throw error;
+        return { success: true };
+    } catch (e: any) {
+        console.error("❌ SYNC ERROR (setActive):", e);
+        return { success: false, error: e.message };
+    }
+};
+
+/**
+ * fetchTournamentConfig
+ * Recovers the full configuration (Host + Pairs) from Supabase
+ * given a tournament ID. Used by Clients to "hydrate" their store.
+ */
+export const fetchTournamentConfig = async (tournamentId: string) => {
+    try {
+        // 1. Fetch Tournament Info (Host)
+        const { data: tData, error: tError } = await supabase
+            .from('tournaments')
+            .select('*')
+            .eq('id', tournamentId)
+            .single();
+
+        if (tError || !tData) throw new Error("Tournament not found");
+
+        // 2. Fetch Pairs
+        const { data: pData, error: pError } = await supabase
+            .from('pairs')
+            .select('*')
+            .eq('tournament_id', tournamentId);
+
+        if (pError) throw new Error("Pairs not found");
+
+        // 3. Reconstruct Pairs Object: Record<string, string[]>
+        const pairsMap: Record<string, string[]> = {};
+        pData.forEach((p: any) => {
+            pairsMap[p.pair_number.toString()] = [p.player1_name, p.player2_name];
+        });
+
+        return {
+            success: true,
+            config: {
+                id: tData.id,
+                hostName: tData.host_name,
+                pairs: pairsMap
+            }
+        };
+
+    } catch (e: any) {
+        console.error("❌ SYNC ERROR (fetchConfig):", e);
+        return { success: false, error: e.message };
+    }
+};
+
+/**
+ * getActiveTournamentId
+ * One-shot check for the current active ID.
+ */
+export const getActiveTournamentId = async () => {
+    try {
+        const { data, error } = await supabase
+            .from('app_state')
+            .select('value')
+            .eq('key', 'global_config')
+            .single();
+
+        if (error) return { success: false, error: error.message };
+        return { success: true, activeId: data?.value?.active_tournament_id || null };
+    } catch (e: any) {
+        return { success: false, error: e.message }; // Fail safe
+    }
+};
