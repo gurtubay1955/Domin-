@@ -84,9 +84,13 @@ export default function Home() {
         return;
       }
 
-      // B. If NEW ID (Different from ours)
-      if (cloudId !== useTournamentStore.getState().tournamentId) {
-        console.log("📥 SYNC: Found new tournament!", cloudId);
+      // B. If NEW ID (Different from ours) OR Missing Map (Recovery)
+      const currentId = useTournamentStore.getState().tournamentId;
+      const currentMap = useTournamentStore.getState().pairUuidMap;
+      const needsHydration = cloudId !== currentId || (cloudId === currentId && (!currentMap || Object.keys(currentMap).length === 0));
+
+      if (needsHydration) {
+        console.log("📥 SYNC: Hydrating Tournament Data...", { cloudId, reason: cloudId !== currentId ? "New ID" : "Missing Map" });
 
         // 1. Fetch Config (Host + Pairs + IDs)
         const { success: cSuccess, config } = await fetchTournamentConfig(cloudId);

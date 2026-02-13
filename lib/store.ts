@@ -297,6 +297,7 @@ export const useTournamentStore = create<TournamentState>()(
                 tournamentId: state.tournamentId,
                 hostName: state.hostName,
                 pairs: state.pairs,
+                pairUuidMap: state.pairUuidMap, // 🗺️ V4.1 Fix: Persist Map!
                 matchHistory: state.matchHistory,
                 isSetupComplete: state.isSetupComplete,
                 // NO persistir estados de control (_hasHydrated, _isResetting)
