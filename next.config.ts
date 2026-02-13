@@ -9,6 +9,8 @@ const withPWA = withPWAInit({
   disable: false, // Enable in dev for testing features
   workboxOptions: {
     disableDevLogs: true,
+    skipWaiting: true,
+    clientsClaim: true,
   },
 });
 
