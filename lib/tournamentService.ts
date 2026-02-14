@@ -244,6 +244,30 @@ export const setActiveTournament = async (tournamentId: string) => {
 };
 
 /**
+ * deactivateTournament
+ * Clears the active tournament from the global configuration.
+ * Stops clients from re-hydrating an ended tournament.
+ */
+export const deactivateTournament = async () => {
+    console.log("🌍 SYNC: Deactivating GLOBAL tournament...");
+    try {
+        const { error } = await supabase
+            .from('app_state')
+            .upsert({
+                key: 'global_config',
+                value: { active_tournament_id: null }, // NULL kills the session
+                updated_at: new Date().toISOString()
+            });
+
+        if (error) throw error;
+        return { success: true };
+    } catch (e: any) {
+        console.error("❌ SYNC ERROR (deactivate):", e);
+        return { success: false, error: e.message };
+    }
+};
+
+/**
  * fetchTournamentConfig
  * Recovers the full configuration (Host + Pairs) from Supabase
  * given a tournament ID. Used by Clients to "hydrate" their store.

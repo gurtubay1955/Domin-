@@ -156,12 +156,26 @@ export default function Home() {
         { event: 'INSERT', schema: 'public', table: 'matches', filter: `tournament_id=eq.${tournamentId}` },
         (payload: any) => {
           const m = payload.new;
-          console.log("⚽ MATCH GOAL:", m.id);
+          console.log("⚽ MATCH EVENT RECEIVED!", {
+            id: m.id,
+            pair_a: m.pair_a_id,
+            pair_b: m.pair_b_id
+          });
+
+          // DEBUG MAP
+          const currentMap = useTournamentStore.getState().pairUuidMap;
+          console.log("🗺️ MAP LOOKUP:", currentMap);
 
           // MAP DB -> STORE using our mapped UUIDs
           // We need to convert pair_a_id (UUID) -> 1 (Number)
-          const pairANum = pairUuidMap[m.pair_a_id] || 0;
-          const pairBNum = pairUuidMap[m.pair_b_id] || 0;
+          const pairANum = currentMap[m.pair_a_id] || 0;
+          const pairBNum = currentMap[m.pair_b_id] || 0;
+
+          console.log(`🔗 MAPPED PAIRS: ${m.pair_a_id} -> ${pairANum}, ${m.pair_b_id} -> ${pairBNum}`);
+
+          if (pairANum === 0 || pairBNum === 0) {
+            console.warn("⚠️ UNABLE TO MAP PAIRS! Sync might fail visually.");
+          }
 
           // Construct Record
           const matchRecord = {
@@ -182,9 +196,26 @@ export default function Home() {
           syncMatch(matchRecord);
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`📡 MATCH SUBSCRIPTION STATUS [${tournamentId}]:`, status);
+      });
 
-    return () => { supabase.removeChannel(channel); };
+    // 🔄 V4.2 POLLING FALLBACK (Every 10s)
+    // Robustness against Realtime failures (or disabled Replication)
+    const intervalId = setInterval(async () => {
+      // console.log("🔄 POLLING: Checking for new matches...", tournamentId);
+      const { success, matches } = await fetchMatches(tournamentId);
+      if (success && matches && matches.length > 0) {
+        // Bulk Sync (Handling duplicates internally in Store)
+        const { syncMatches } = useTournamentStore.getState();
+        syncMatches(matches);
+      }
+    }, 10000); // 10 seconds
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(intervalId);
+    };
 
   }, [tournamentId, pairUuidMap, syncMatch]); // Re-subscribe if tournament or pairUuidMap changes
 
@@ -220,6 +251,14 @@ export default function Home() {
   };
 
   const confirmReset = () => {
+    // 1. Kill Cloud Session (Async, but we don't wait excessively)
+    import('@/lib/tournamentService').then(({ deactivateTournament }) => {
+      deactivateTournament().then(() => {
+        console.log("dupe-kill: cloud session ended.");
+      });
+    });
+
+    // 2. Kill Local Session
     nuclearReset();
     setShowResetModal(false);
   };

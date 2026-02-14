@@ -16,13 +16,14 @@ async function testMatches() {
     console.log("🔍 DIAGNOSIS V4.1: Checking Matches Table...");
 
     // 1. Get Active Tournament (to have a valid ID)
-    const { data: config } = await supabase
-        .from('app_state')
-        .select('value')
-        .eq('key', 'global_config')
-        .single();
-
-    const tournamentId = config?.value?.active_tournament_id;
+    // FORCE USE OF BROWSER CREATED ID
+    const tournamentId = '9f394b8d-481d-4393-84e9-db35d291dc0d';
+    // const { data: config } = await supabase
+    //     .from('app_state')
+    //     .select('value')
+    //     .eq('key', 'global_config')
+    //     .single();
+    // const tournamentId = config?.value?.active_tournament_id;
 
     if (!tournamentId) {
         console.error("❌ No active tournament found in app_state.");
@@ -86,6 +87,20 @@ async function testMatches() {
         console.error("❌ INSERT FAILED (RLS Issue?):", error.message);
     } else {
         console.log("✅ INSERT SUCCESS. Waiting for Realtime event...");
+
+        // TEST SELECT (RLS Check)
+        console.log("🕵️ Checking if we can READ the match...");
+        const { data: readData, error: readError } = await supabase
+            .from('matches')
+            .select('*')
+            .eq('id', dummyId)
+            .single();
+
+        if (readError) {
+            console.error("❌ READ FAILED: RLS Policy likely blocks SELECT.", readError.message);
+        } else if (readData) {
+            console.log("✅ READ SUCCESS: Match found via SELECT.", readData.id);
+        }
     }
 
     // Keep alive for 10 seconds to hear event

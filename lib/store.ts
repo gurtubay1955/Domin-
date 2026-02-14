@@ -48,6 +48,7 @@ interface TournamentState {
     initializeTournament: (id: string, host: string, pairs: Record<string, string[]>, existingMatches?: MatchRecord[], pairUuidMap?: Record<string, number>) => void;
     addMatch: (match: MatchRecord) => void;
     syncMatch: (match: MatchRecord) => void; // ☁️ V4.1: Recibir de la nube
+    syncMatches: (matches: MatchRecord[]) => void; // ☁️ V4.2: Polling Fallback
     clearTournament: () => void;
     getPairNames: (pairId: number) => string[];
 
@@ -129,6 +130,18 @@ export const useTournamentStore = create<TournamentState>()(
 
                     console.log("📥 SYNC: Partida recibida de la nube", match.id);
                     return { matchHistory: [...state.matchHistory, match] };
+                });
+            },
+
+            syncMatches: (matches) => {
+                set((state) => {
+                    // Filter out existing matches
+                    const newMatches = matches.filter(m => !state.matchHistory.some(existing => existing.id === m.id));
+
+                    if (newMatches.length === 0) return state;
+
+                    console.log(`📥 SYNC BULK: ${newMatches.length} nuevas partidas recibidas.`);
+                    return { matchHistory: [...state.matchHistory, ...newMatches] };
                 });
             },
 
