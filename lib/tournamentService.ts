@@ -94,6 +94,16 @@ export const recordMatch = async (match: MatchRecord) => {
         const myPairId = pairData.find(p => p.pair_number === match.myPair)?.id;
         const oppPairId = pairData.find(p => p.pair_number === match.oppPair)?.id;
 
+        // 🛡️ V4.2.2 SECURITY: STRICT VALIDATION
+        if (!myPairId || !oppPairId) {
+            console.error("⛔ CRITICAL: Attempted to save match with UNMAPPED PAIRS.", {
+                myPair: match.myPair,
+                oppPair: match.oppPair,
+                foundPairs: pairData
+            });
+            throw new Error(`Integrity Error: Could not resolve Pair UUIDs for ${match.myPair} vs ${match.oppPair}. Aborting save.`);
+        }
+
         // Determine Winner ID (Optional)
         const winnerId = match.scoreMy > match.scoreOpp ? myPairId : oppPairId;
 
