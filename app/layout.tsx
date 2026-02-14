@@ -34,6 +34,8 @@ export const viewport = {
   userScalable: false,
 };
 
+import GlobalSync from "@/components/GlobalSync";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -44,6 +46,7 @@ export default function RootLayout({
       <body
         className={`${patrickHand.variable} antialiased`}
       >
+        <GlobalSync />
         {children}
       </body>
     </html>

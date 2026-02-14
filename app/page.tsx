@@ -20,8 +20,7 @@ import { useTournamentStore } from "@/lib/store"; // Quantum Store
 import { useRouter } from 'next/navigation';
 import PinGuard from '@/components/PinGuard'; // Import Guard
 
-import { supabase } from '@/lib/supabaseClient';
-import { getActiveTournamentId, fetchTournamentConfig, fetchMatches } from '@/lib/tournamentService';
+// Imports removed (Moved to GlobalSync)
 
 export default function Home() {
   const router = useRouter();
@@ -31,13 +30,13 @@ export default function Home() {
 
   // QUANTUM UPGRADE: Connect to Store
   const {
-    tournamentId, // Need this for subscription
+    // tournamentId, (Removed - used in GlobalSync)
     isSetupComplete,
     hostName,
     pairs,
-    pairUuidMap, // Need this for mapping
-    initializeTournament,
-    syncMatch, // Action to add external match
+    // pairUuidMap, (Removed - used in GlobalSync)
+    // initializeTournament, (Removed - used in GlobalSync)
+    // syncMatch, (Removed - used in GlobalSync)
     nuclearReset // New Anti-Zombie Action
   } = useTournamentStore();
 
@@ -70,154 +69,7 @@ export default function Home() {
   }, []);
 
   // --- V4.1 SYNC UPGRADE (FULL MATRIX) ---
-
-  // 1. GLOBAL STATE SYNC (App State)
-  // Listens for "Jornada Activa" signals.
-  useEffect(() => {
-    const handleSync = async (cloudId: string | null) => {
-      // A. If NULL (No active tournament)
-      if (!cloudId) {
-        if (isSetupComplete && hostName) {
-          console.log("🌪️ SYNC: Tournament ended remotely. Triggering Nuclear Reset...");
-          nuclearReset();
-        }
-        return;
-      }
-
-      // B. If NEW ID (Different from ours) OR Missing Map (Recovery)
-      const currentId = useTournamentStore.getState().tournamentId;
-      const currentMap = useTournamentStore.getState().pairUuidMap;
-      const needsHydration = cloudId !== currentId || (cloudId === currentId && (!currentMap || Object.keys(currentMap).length === 0));
-
-      if (needsHydration) {
-        console.log("📥 SYNC: Hydrating Tournament Data...", { cloudId, reason: cloudId !== currentId ? "New ID" : "Missing Map" });
-
-        // 1. Fetch Config (Host + Pairs + IDs)
-        const { success: cSuccess, config } = await fetchTournamentConfig(cloudId);
-
-        if (cSuccess && config) {
-          // 2. Fetch History (Matches)
-          const { success: mSuccess, matches } = await fetchMatches(cloudId);
-
-          if (mSuccess && matches) {
-            // HYDRATE EVERYTHING!
-            // Pass config + matches + uuidMap
-            console.log(`💧 HYDRATING: ${matches.length} matches found.`);
-            initializeTournament(
-              config.id,
-              config.hostName,
-              config.pairs,
-              matches,
-              config.pairIds
-            );
-          }
-        }
-      }
-    };
-
-    // Check on Mount
-    getActiveTournamentId().then((res) => {
-      if (res.success && typeof res.activeId !== 'undefined') {
-        handleSync(res.activeId);
-      }
-    });
-
-    // Subscribe to Global Changes
-    const channel = supabase.channel('global_sync')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'app_state', filter: "key=eq.global_config" },
-        (payload: any) => {
-          console.log("🔔 SYNC SIGNAL RECEIVED:", payload);
-          const newId = payload.new?.value?.active_tournament_id;
-          handleSync(newId);
-        }
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [isSetupComplete, hostName]);
-
-
-  // 2. MATCH SYNC (Realtime Gameplay)
-  // Listens for NEW matches in the current tournament.
-  useEffect(() => {
-    // Check if tournamentId is available and not null/undefined
-    if (!tournamentId) {
-      console.log("🔌 SYNC: No tournamentId, skipping match subscription.");
-      return;
-    }
-
-    console.log("🔌 SYNC: Subscribing to matches for", tournamentId);
-
-    const channel = supabase.channel(`room_matches:${tournamentId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'matches', filter: `tournament_id=eq.${tournamentId}` },
-        (payload: any) => {
-          const m = payload.new;
-          console.log("⚽ MATCH EVENT RECEIVED!", {
-            id: m.id,
-            pair_a: m.pair_a_id,
-            pair_b: m.pair_b_id
-          });
-
-          // DEBUG MAP
-          const currentMap = useTournamentStore.getState().pairUuidMap;
-          console.log("🗺️ MAP LOOKUP:", currentMap);
-
-          // MAP DB -> STORE using our mapped UUIDs
-          // We need to convert pair_a_id (UUID) -> 1 (Number)
-          const pairANum = currentMap[m.pair_a_id] || 0;
-          const pairBNum = currentMap[m.pair_b_id] || 0;
-
-          console.log(`🔗 MAPPED PAIRS: ${m.pair_a_id} -> ${pairANum}, ${m.pair_b_id} -> ${pairBNum}`);
-
-          if (pairANum === 0 || pairBNum === 0) {
-            console.warn("⚠️ UNABLE TO MAP PAIRS! Sync might fail visually.");
-          }
-
-          // Construct Record
-          const matchRecord = {
-            id: m.id,
-            tournamentId: m.tournament_id,
-            myPair: pairANum,
-            oppPair: pairBNum,
-            scoreMy: m.score_a,
-            scoreOpp: m.score_b,
-            oppNames: m.pair_b_names || ["?", "?"],
-            timestamp: m.timestamp,
-            handsMy: m.hands_a,
-            handsOpp: m.hands_b,
-            isZapatero: m.termination_type
-          };
-
-          // Sync to Store
-          syncMatch(matchRecord);
-        }
-      )
-      .subscribe((status) => {
-        console.log(`📡 MATCH SUBSCRIPTION STATUS [${tournamentId}]:`, status);
-      });
-
-    // 🔄 V4.2 POLLING FALLBACK (Every 10s)
-    // Robustness against Realtime failures (or disabled Replication)
-    const intervalId = setInterval(async () => {
-      // console.log("🔄 POLLING: Checking for new matches...", tournamentId);
-      const { success, matches } = await fetchMatches(tournamentId);
-      if (success && matches && matches.length > 0) {
-        // Bulk Sync (Handling duplicates internally in Store)
-        const { syncMatches } = useTournamentStore.getState();
-        syncMatches(matches);
-      }
-    }, 10000); // 10 seconds
-
-    return () => {
-      supabase.removeChannel(channel);
-      clearInterval(intervalId);
-    };
-
-  }, [tournamentId, pairUuidMap, syncMatch]); // Re-subscribe if tournament or pairUuidMap changes
+  // MOVED TO GLOBAL COMPONENT <GlobalSync />
 
 
   /**
