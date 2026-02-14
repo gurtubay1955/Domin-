@@ -250,15 +250,17 @@ export default function Home() {
     setShowResetModal(true);
   };
 
-  const confirmReset = () => {
-    // 1. Kill Cloud Session (Async, but we don't wait excessively)
-    import('@/lib/tournamentService').then(({ deactivateTournament }) => {
-      deactivateTournament().then(() => {
-        console.log("dupe-kill: cloud session ended.");
-      });
-    });
+  const confirmReset = async () => {
+    // 1. Kill Cloud Session (Wait for it!)
+    try {
+      const { deactivateTournament } = await import('@/lib/tournamentService');
+      await deactivateTournament();
+      console.log("dupe-kill: cloud session ended for real.");
+    } catch (e) {
+      console.error("Failed to kill cloud session", e);
+    }
 
-    // 2. Kill Local Session
+    // 2. Kill Local Session (Only after cloud is dead)
     nuclearReset();
     setShowResetModal(false);
   };

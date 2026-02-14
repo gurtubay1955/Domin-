@@ -165,6 +165,7 @@ export const useTournamentStore = create<TournamentState>()(
                     tournamentId: null,
                     hostName: "",
                     pairs: {},
+                    pairUuidMap: {}, // 🧹 V4.2.1 Fix: Clear Map
                     matchHistory: [],
                     isSetupComplete: false,
                     _hasHydrated: true // Importante: sigue hidratado pero vacío
@@ -187,6 +188,7 @@ export const useTournamentStore = create<TournamentState>()(
                         tournamentId: null,
                         hostName: "",
                         pairs: {},
+                        pairUuidMap: {}, // 🧹 V4.2.1 Fix: Clear Map
                         matchHistory: [],
                         isSetupComplete: false,
                         _hasHydrated: true // Forzar como hidratado
@@ -221,6 +223,7 @@ export const useTournamentStore = create<TournamentState>()(
                     tournamentId: null,
                     hostName: "",
                     pairs: {},
+                    pairUuidMap: {}, // 🧹 V4.2.1 Fix: Clear Map
                     matchHistory: [],
                     isSetupComplete: false,
                     _hasHydrated: false // CRÍTICO: NO está hidratado
@@ -233,6 +236,7 @@ export const useTournamentStore = create<TournamentState>()(
                             tournamentId: null,
                             hostName: "",
                             pairs: {},
+                            pairUuidMap: {}, // 🧹 V4.2.1 Fix: Clear Map
                             matchHistory: [],
                             isSetupComplete: false,
                             _hasHydrated: true, // Forzar hidratación "vacía"
