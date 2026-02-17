@@ -34,7 +34,15 @@ export const viewport = {
   userScalable: false,
 };
 
+// Force no-cache in development to prevent stale versions
+export const headers = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+
 import GlobalSync from "@/components/GlobalSync";
+import VersionChecker from "@/components/VersionChecker";
 
 export default function RootLayout({
   children,
@@ -43,10 +51,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
+      <head>
+        {/* Cache busting - force fresh content */}
+        <meta httpEquiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+        <meta httpEquiv="Pragma" content="no-cache" />
+        <meta httpEquiv="Expires" content="0" />
+      </head>
       <body
         className={`${patrickHand.variable} antialiased`}
       >
         <GlobalSync />
+        <VersionChecker />
         {children}
       </body>
     </html>

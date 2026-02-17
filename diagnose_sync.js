@@ -1,75 +1,45 @@
+/**
+ * Script de diagnóstico para verificar sincronización en tiempo real
+ * Ejecutar en la consola del navegador (F12)
+ */
 
-const { createClient } = require('@supabase/supabase-js');
-const fs = require('fs');
-const path = require('path');
+console.log('🔍 DIAGNÓSTICO DE SINCRONIZACIÓN V4.8');
+console.log('=====================================\n');
 
-// 1. Load Environment Variables manually (no dotenv dependency needed if we parse)
-function loadEnv() {
-    try {
-        const envPath = path.resolve(__dirname, '.env.local');
-        if (!fs.existsSync(envPath)) return null;
-
-        const content = fs.readFileSync(envPath, 'utf8');
-        const env = {};
-        content.split('\n').forEach(line => {
-            const [key, val] = line.split('=');
-            if (key && val) env[key.trim()] = val.trim();
-        });
-        return env;
-    } catch (e) {
+// 1. Verificar si hay tournamentId en el store
+const checkStore = () => {
+    const storeData = localStorage.getItem('pitomate-storage-v2');
+    if (!storeData) {
+        console.error('❌ NO HAY DATOS EN STORE');
         return null;
     }
+
+    const parsed = JSON.parse(storeData);
+    console.log('✅ Store encontrado:');
+    console.log('  - Tournament ID:', parsed.state.tournamentId);
+    console.log('  - Host:', parsed.state.hostName);
+    console.log('  - Parejas configuradas:', Object.keys(parsed.state.pairs).length);
+    console.log('  - Partidas en historial:', parsed.state.matchHistory?.length || 0);
+    console.log('  - Live matches:', Object.keys(parsed.state.liveScores || {}).length);
+
+    return parsed.state.tournamentId;
+};
+
+const tournamentId = checkStore();
+
+if (!tournamentId) {
+    console.error('⛔ No se puede continuar sin tournament ID');
+} else {
+    console.log('\n🔍 Verificando live_matches en Supabase...');
+    console.log('Ejecuta esto en el Editor SQL de Supabase:\n');
+    console.log(`SELECT * FROM live_matches WHERE tournament_id = '${tournamentId}';`);
+    console.log('\nSi está vacío, significa que:');
+    console.log('1. No se ejecutó el SQL de permisos real-time');
+    console.log('2. O la función updateLiveMatch() falló');
+
+    console.log('\n🔍 Verificando suscripción real-time...');
+    console.log('Busca en los logs de consola:');
+    console.log('  - "📡 Subscribing to LIVE matches"');
+    console.log('  - "✅ V4.8: Opponents marked as SEATED"');
+    console.log('  - "🔥 LIVE UPDATE:"');
 }
-
-const env = loadEnv();
-if (!env || !env.NEXT_PUBLIC_SUPABASE_URL || !env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    console.error("❌ ERROR: Could not load .env.local or missing keys.");
-    process.exit(1);
-}
-
-const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-
-async function diagnose() {
-    console.log("🔍 DIAGNOSING SUPABASE CONNECTIVITY...");
-    console.log(`📡 URL: ${env.NEXT_PUBLIC_SUPABASE_URL}`);
-    console.log("----------------------------------------");
-
-    // TEST 1: READ app_state
-    console.log("1️⃣  TEST READ (app_state)...");
-    const { data: readData, error: readError } = await supabase
-        .from('app_state')
-        .select('*');
-
-    if (readError) {
-        console.error("❌ READ FAILED:", readError.message);
-    } else {
-        console.log("✅ READ SUCCESS. Rows found:", readData.length);
-        console.log("   DATA:", JSON.stringify(readData, null, 2));
-    }
-
-    // TEST 2: WRITE app_state (Insert/Upsert)
-    console.log("\n2️⃣  TEST WRITE (app_state)...");
-    const testId = "TEST-DIAGNOSTIC-" + Date.now();
-    const { error: writeError } = await supabase
-        .from('app_state')
-        .upsert({
-            key: 'diagnostic_test',
-            value: { status: 'ok', id: testId },
-            updated_at: new Date().toISOString()
-        });
-
-    if (writeError) {
-        console.error("❌ WRITE FAILED:", writeError.message);
-    } else {
-        console.log("✅ WRITE SUCCESS. Row inserted.");
-
-        // CLEANUP
-        console.log("   Cleaning up test row...");
-        await supabase.from('app_state').delete().eq('key', 'diagnostic_test');
-    }
-
-    console.log("\n----------------------------------------");
-    console.log("🏁 DIAGNOSIS COMPLETE");
-}
-
-diagnose();

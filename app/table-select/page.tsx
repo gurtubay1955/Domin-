@@ -102,9 +102,36 @@ export default function TableSelectPage() {
     /**
      * handleStartMatch
      * Prepares the game session and redirects to the ScoreBoard.
+     * 🔴 V4.8: NOW updates live_matches IMMEDIATELY for real-time sync
      */
-    const handleStartMatch = () => {
-        if (!myPairNum || !opponentPairNum) return;
+    const handleStartMatch = async () => {
+        console.log("🎯 handleStartMatch called", { myPairNum, opponentPairNum, tournamentId });
+
+        if (!myPairNum || !opponentPairNum || !tournamentId) {
+            console.error("❌ Missing required data:", { myPairNum, opponentPairNum, tournamentId });
+            return;
+        }
+
+        // 🔴 V4.8: Create live_matches entry IMMEDIATELY
+        // This notifies all other devices that these pairs are now "seated at a table"
+        try {
+            console.log("📤 Attempting to update live_matches...");
+            const { updateLiveMatch } = await import('@/lib/tournamentService');
+
+            const result = await updateLiveMatch(
+                tournamentId,
+                myPairNum,
+                opponentPairNum,
+                0, // Initial score
+                0,
+                0  // hand_number = 0 means "seated but haven't started playing yet"
+            );
+
+            console.log('✅ V4.8: Opponents marked as SEATED in live_matches', result);
+        } catch (error) {
+            console.error('❌ Failed to update live_matches:', error);
+            // Don't block the user, just log the error
+        }
 
         // Create a Session Config Object for the Game Page
         // (This remains transient session state, not store state, because it's "in progress")
@@ -120,6 +147,7 @@ export default function TableSelectPage() {
         localStorage.setItem("activeMatch", configStr);
         sessionStorage.setItem("activeMatch", configStr);
 
+        console.log("🚀 Navigating to /game...");
         router.push("/game");
     };
 
@@ -413,23 +441,41 @@ function LiveMatchesHandler({
                     const isPairA = pNum === pA;
                     const myScore = isPairA ? data.scoreA : data.scoreB;
                     const oppScore = isPairA ? data.scoreB : data.scoreA;
+                    const handNumber = data.hand || 0;
 
-                    liveBadge = (
-                        <div className="absolute top-2 right-2 bg-red-500/90 text-white text-xs font-bold px-2 py-1 rounded-full animate-pulse shadow-lg z-20">
-                            JUGANDO: {myScore} - {oppScore}
-                        </div>
-                    );
+                    // 🔴 V4.8: Distinguish between SEATED (hand=0) and PLAYING (hand>0)
+                    if (handNumber === 0) {
+                        // Just seated, haven't started playing yet
+                        liveBadge = (
+                            <div className="absolute top-2 right-2 bg-orange-500/90 text-white text-xs font-bold px-2 py-1 rounded-full animate-pulse shadow-lg z-20">
+                                🪑 EN MESA
+                            </div>
+                        );
+                    } else {
+                        // Actively playing
+                        liveBadge = (
+                            <div className="absolute top-2 right-2 bg-red-500/90 text-white text-xs font-bold px-2 py-1 rounded-full animate-pulse shadow-lg z-20">
+                                🎲 JUGANDO: {myScore} - {oppScore}
+                            </div>
+                        );
+                    }
                 }
+
+                const isOccupied = !!activeMatch; // V4.9: Pair is unavailable if playing
 
                 return (
                     <button
                         key={pNum}
-                        onClick={() => setOpponentPairNum(pNum)}
+                        onClick={() => !isOccupied && setOpponentPairNum(pNum)}
+                        disabled={isOccupied}
                         className={`
                             relative flex items-center justify-between p-3 rounded-xl transition-all duration-300 border
-                            ${isSelected
-                                ? 'bg-[#A5D6A7] text-[#1B5E20] border-[#A5D6A7] scale-[1.02] shadow-lg'
-                                : 'bg-white/5 hover:bg-white/10 border-white/5 text-white/80'}
+                            ${isOccupied
+                                ? 'bg-white/5 border-white/10 text-white/30 cursor-not-allowed opacity-60'
+                                : isSelected
+                                    ? 'bg-[#A5D6A7] text-[#1B5E20] border-[#A5D6A7] scale-[1.02] shadow-lg'
+                                    : 'bg-white/5 hover:bg-white/10 border-white/5 text-white/80 cursor-pointer'
+                            }
                         `}
                     >
                         {liveBadge}

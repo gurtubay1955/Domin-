@@ -6,7 +6,7 @@ const withPWA = withPWAInit({
   cacheOnFrontEndNav: true,
   aggressiveFrontEndNavCaching: true,
   reloadOnOnline: true,
-  disable: false, // Enable in dev for testing features
+  disable: process.env.NODE_ENV === 'development', // Disable in dev to avoid cache issues
   workboxOptions: {
     disableDevLogs: true,
     skipWaiting: true,
@@ -16,6 +16,7 @@ const withPWA = withPWAInit({
 
 const nextConfig: NextConfig = {
   /* config options here */
+  turbopack: {}, // Silence Turbopack/webpack conflict warning
 };
 
 export default withPWA(nextConfig);

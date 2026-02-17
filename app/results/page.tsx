@@ -179,6 +179,11 @@ export default function ResultsPage() {
                             rankIcon = <Medal className="text-[#CD7F32]" size={36} />;
                         }
 
+                        // 🔴 V4.5 LIVE STATUS CHECK
+                        const liveMatch = Object.values(useTournamentStore.getState().liveScores || {}).find(
+                            m => m.pairA === team.pairId || m.pairB === team.pairId
+                        );
+
                         return (
                             <div key={team.pairId} className={`relative p-6 md:p-8 rounded-3xl border ${rankColor} transition-all hover:scale-[1.01]`}>
                                 {isFirst && (
@@ -197,6 +202,26 @@ export default function ResultsPage() {
                                         {team.names.map((name, i) => (
                                             <div key={i} className="text-4xl md:text-5xl font-black">{name}</div>
                                         ))}
+
+                                        {/* 🔴 LIVE INDICATOR */}
+                                        {liveMatch && (() => {
+                                            const isPairA = liveMatch.pairA === team.pairId;
+                                            const myScore = isPairA ? liveMatch.scoreA : liveMatch.scoreB;
+                                            const oppScore = isPairA ? liveMatch.scoreB : liveMatch.scoreA;
+
+                                            // Determine who is winning the hand
+                                            const isWinning = myScore > oppScore;
+                                            const colorClass = isWinning ? "text-green-300" : (myScore < oppScore ? "text-red-300" : "text-yellow-300");
+
+                                            return (
+                                                <div className="mt-3 flex items-center gap-2 bg-black/20 border border-white/10 px-4 py-1 rounded-full animate-pulse">
+                                                    <div className={`w-3 h-3 rounded-full ${isWinning ? "bg-green-500" : "bg-red-500"}`}></div>
+                                                    <span className={`${colorClass} font-bold tracking-wider text-lg`}>
+                                                        JUGANDO: {myScore} - {oppScore}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
 
                                     {/* STATS (CENTERED & SPACED) */}

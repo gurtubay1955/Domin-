@@ -29,6 +29,17 @@ export interface MatchRecord {
     isZapatero: 'double' | 'single' | 'none'; // Tipo de victoria/derrota
 }
 
+// 🔴 V4.5 LIVE SYNC DATA
+export interface LiveMatchData {
+    tournamentId: string;
+    pairA: number; // Always sorted pairA < pairB
+    pairB: number;
+    scoreA: number;
+    scoreB: number;
+    handNumber: number;
+    lastUpdated: string;
+}
+
 interface TournamentState {
     // Estados principales
     tournamentId: string | null;
@@ -36,6 +47,7 @@ interface TournamentState {
     pairs: Record<string, string[]>;
     pairUuidMap: Record<string, number>; // 🗺️ V4.1: UUID -> Pair Number Map
     matchHistory: MatchRecord[];
+    liveScores: Record<string, LiveMatchData>; // 🔴 V4.5: Active Games
     isSetupComplete: boolean;
 
     // 🔮 ESTADOS DE CONTROL ANTI-ZOMBIE
@@ -44,11 +56,11 @@ interface TournamentState {
     _resetTimestamp: number | null; // Cuándo fue el último reset
 
     // Acciones principales
-    // Acciones principales
     initializeTournament: (id: string, host: string, pairs: Record<string, string[]>, existingMatches?: MatchRecord[], pairUuidMap?: Record<string, number>) => void;
     addMatch: (match: MatchRecord) => void;
     syncMatch: (match: MatchRecord) => void; // ☁️ V4.1: Recibir de la nube
     syncMatches: (matches: MatchRecord[]) => void; // ☁️ V4.2: Polling Fallback
+    syncLiveMatch: (data: LiveMatchData) => void; // 🔴 V4.5: Update live score
     clearTournament: () => void;
     getPairNames: (pairId: number) => string[];
 
@@ -72,6 +84,7 @@ export const useTournamentStore = create<TournamentState>()(
             pairs: {},
             pairUuidMap: {},
             matchHistory: [],
+            liveScores: {}, // 🔴 Init
             isSetupComplete: false,
 
             // Estados de control iniciales
@@ -115,7 +128,18 @@ export const useTournamentStore = create<TournamentState>()(
                         });
                     });
 
-                    return { matchHistory: [...state.matchHistory, match] };
+                    // 🧹 Cleanup Live Score for this match (Atomic update)
+                    // Pair A is usually min(myPair, oppPair) in live logic, but let's just clear consistent key
+                    const pA = Math.min(match.myPair, match.oppPair);
+                    const pB = Math.max(match.myPair, match.oppPair);
+                    const key = `${pA}-${pB}`;
+
+                    const { [key]: _, ...remainingLive } = state.liveScores;
+
+                    return {
+                        matchHistory: [...state.matchHistory, match],
+                        liveScores: remainingLive // Remove "Watching" status
+                    };
                 });
             },
 
@@ -124,12 +148,21 @@ export const useTournamentStore = create<TournamentState>()(
                     // Prevenir duplicados (CRÍTICO para eventos realtime)
                     const exists = state.matchHistory.some(m => m.id === match.id);
                     if (exists) {
-                        // console.log("🔄 SYNC: Match ya existe, ignorando.", match.id);
                         return state;
                     }
 
                     console.log("📥 SYNC: Partida recibida de la nube", match.id);
-                    return { matchHistory: [...state.matchHistory, match] };
+
+                    // 🧹 Cleanup Live Score (Remote finish)
+                    const pA = Math.min(match.myPair, match.oppPair);
+                    const pB = Math.max(match.myPair, match.oppPair);
+                    const key = `${pA}-${pB}`;
+                    const { [key]: _, ...remainingLive } = state.liveScores;
+
+                    return {
+                        matchHistory: [...state.matchHistory, match],
+                        liveScores: remainingLive
+                    };
                 });
             },
 
@@ -141,7 +174,44 @@ export const useTournamentStore = create<TournamentState>()(
                     if (newMatches.length === 0) return state;
 
                     console.log(`📥 SYNC BULK: ${newMatches.length} nuevas partidas recibidas.`);
-                    return { matchHistory: [...state.matchHistory, ...newMatches] };
+
+                    // Cleanup any live scores that are now finished
+                    let newLive = { ...state.liveScores };
+                    newMatches.forEach(m => {
+                        const pA = Math.min(m.myPair, m.oppPair);
+                        const pB = Math.max(m.myPair, m.oppPair);
+                        delete newLive[`${pA}-${pB}`];
+                    });
+
+                    return {
+                        matchHistory: [...state.matchHistory, ...newMatches],
+                        liveScores: newLive
+                    };
+                });
+            },
+
+            // 🔴 V4.5 LIVE SYNC ACTION
+            syncLiveMatch: (data) => {
+                set((state) => {
+                    const key = `${data.pairA}-${data.pairB}`;
+
+                    // If this match is somehow already in history (race condition), ignore live update
+                    const historyExists = state.matchHistory.some(m => {
+                        const mPA = Math.min(m.myPair, m.oppPair);
+                        const mPB = Math.max(m.myPair, m.oppPair);
+                        return mPA === data.pairA && mPB === data.pairB && m.timestamp > Date.parse(data.lastUpdated);
+                    });
+
+                    if (historyExists) return state;
+
+                    console.log(`🔴 LIVE UPDATE: Mesa ${data.pairA} vs ${data.pairB} => ${data.scoreA}-${data.scoreB}`);
+
+                    return {
+                        liveScores: {
+                            ...state.liveScores,
+                            [key]: data
+                        }
+                    };
                 });
             },
 
@@ -167,6 +237,7 @@ export const useTournamentStore = create<TournamentState>()(
                     pairs: {},
                     pairUuidMap: {}, // 🧹 V4.2.1 Fix: Clear Map
                     matchHistory: [],
+                    liveScores: {}, // 🔴 Clear Live
                     isSetupComplete: false,
                     _hasHydrated: true // Importante: sigue hidratado pero vacío
                 });
@@ -190,6 +261,7 @@ export const useTournamentStore = create<TournamentState>()(
                         pairs: {},
                         pairUuidMap: {}, // 🧹 V4.2.1 Fix: Clear Map
                         matchHistory: [],
+                        liveScores: {}, // 🔴 Clear Live
                         isSetupComplete: false,
                         _hasHydrated: true // Forzar como hidratado
                     });
@@ -225,6 +297,7 @@ export const useTournamentStore = create<TournamentState>()(
                     pairs: {},
                     pairUuidMap: {}, // 🧹 V4.2.1 Fix: Clear Map
                     matchHistory: [],
+                    liveScores: {}, // 🔴 Clear Live
                     isSetupComplete: false,
                     _hasHydrated: false // CRÍTICO: NO está hidratado
                 });
@@ -238,6 +311,7 @@ export const useTournamentStore = create<TournamentState>()(
                             pairs: {},
                             pairUuidMap: {}, // 🧹 V4.2.1 Fix: Clear Map
                             matchHistory: [],
+                            liveScores: {},
                             isSetupComplete: false,
                             _hasHydrated: true, // Forzar hidratación "vacía"
                             _isResetting: false,
@@ -316,6 +390,7 @@ export const useTournamentStore = create<TournamentState>()(
                 pairs: state.pairs,
                 pairUuidMap: state.pairUuidMap, // 🗺️ V4.1 Fix: Persist Map!
                 matchHistory: state.matchHistory,
+                liveScores: state.liveScores, // 🔴 V4.5 Persist Live Scores
                 isSetupComplete: state.isSetupComplete,
                 // NO persistir estados de control (_hasHydrated, _isResetting)
             }),

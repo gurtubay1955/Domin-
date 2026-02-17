@@ -19,6 +19,7 @@ import { OFFICIAL_PLAYERS } from '@/lib/constants';
 import { useTournamentStore } from "@/lib/store"; // Quantum Store
 import { useRouter } from 'next/navigation';
 import PinGuard from '@/components/PinGuard'; // Import Guard
+import { supabase } from '@/lib/supabaseClient'; // For real-time subscription
 
 // Imports removed (Moved to GlobalSync)
 
@@ -68,6 +69,57 @@ export default function Home() {
     });
   }, []);
 
+  // 🔴 V4.7 REAL-TIME HOST SYNC
+  // Subscribe to host_name changes in today's tournament
+  useEffect(() => {
+    const today = new Date().toISOString().split('T')[0];
+
+    // Fetch current host on mount
+    const fetchCurrentHost = async () => {
+      const { data } = await supabase
+        .from('tournaments')
+        .select('host_name')
+        .eq('date', today)
+        .maybeSingle();
+
+      if (data?.host_name && data.host_name !== displayHost) {
+        console.log('📡 Initial host from DB:', data.host_name);
+        setDisplayHost(data.host_name);
+      }
+    };
+
+    fetchCurrentHost();
+
+    // Subscribe to real-time changes
+    const channel = supabase
+      .channel('host_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tournaments',
+          filter: `date=eq.${today}`
+        },
+        (payload) => {
+          console.log('🔥 HOST UPDATE:', payload);
+          if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+            const newHost = (payload.new as any)?.host_name;
+            // V4.9: Handle null host_name (reset scenario)
+            if (newHost !== displayHost) {
+              console.log('📡 Updating host from real-time:', newHost || '(cleared)');
+              setDisplayHost(newHost || '');
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [displayHost]);
+
   // --- V4.1 SYNC UPGRADE (FULL MATRIX) ---
   // MOVED TO GLOBAL COMPONENT <GlobalSync />
 
@@ -103,16 +155,20 @@ export default function Home() {
   };
 
   const confirmReset = async () => {
+    console.log("🔴 CONFIRM RESET: Starting reset process...");
+
     // 1. Kill Cloud Session (Wait for it!)
     try {
       const { deactivateTournament } = await import('@/lib/tournamentService');
-      await deactivateTournament();
-      console.log("dupe-kill: cloud session ended for real.");
+      console.log("📤 Calling deactivateTournament...");
+      const result = await deactivateTournament();
+      console.log("✅ deactivateTournament result:", result);
     } catch (e) {
-      console.error("Failed to kill cloud session", e);
+      console.error("❌ Failed to deactivate tournament:", e);
     }
 
     // 2. Kill Local Session (Only after cloud is dead)
+    console.log("💣 Calling nuclearReset...");
     nuclearReset();
     setShowResetModal(false);
   };
@@ -154,9 +210,18 @@ export default function Home() {
                   {OFFICIAL_PLAYERS.map((player) => (
                     <button
                       key={player}
-                      onClick={() => {
+                      onClick={async () => {
                         setDisplayHost(player);
                         setIsHostMenuOpen(false);
+
+                        // 🔴 V4.7: Save to Supabase for real-time sync
+                        const { updateHostName } = await import('@/lib/tournamentService');
+                        const result = await updateHostName(player);
+                        if (!result.success) {
+                          console.error('Failed to sync host:', result.error);
+                        } else {
+                          console.log('✅ Host synced to all devices:', player);
+                        }
                       }}
                       className={`w-full text-left px-6 py-4 hover:bg-white/10 transition-colors text-2xl ${displayHost === player ? 'bg-[#A5D6A7]/20 text-[#A5D6A7] font-bold' : 'text-[#FDFBF7]'}`}
                     >
@@ -233,7 +298,7 @@ export default function Home() {
                 ) : (
                   <>
                     <PlayCircle size={40} strokeWidth={2.5} className={displayHost ? "" : "opacity-20"} />
-                    {displayHost ? "CONFIGURAR JORNADA" : "ELIGE ANFITRIÓN PRIMERO"}
+                    {displayHost ? "SELECCIONAR PAREJAS" : "ELIGE ANFITRIÓN PRIMERO"}
                   </>
                 )}
               </button>
@@ -246,7 +311,7 @@ export default function Home() {
         {/* Footer Info */}
         <div className="flex flex-col items-center gap-6 opacity-40 text-xl text-center font-bold tracking-widest mt-8">
           <Users size={18} />
-          <span>SISTEMA V4.0 (SYNC)</span>
+          <span>SISTEMA V4.9 (AUTO-SYNC)</span>
         </div>
 
         <div className="flex gap-6 mt-4">

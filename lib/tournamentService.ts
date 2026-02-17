@@ -230,6 +230,59 @@ export const deleteLiveMatch = async (tournamentId: string, myPair: number, oppP
 // --- V4 MULTIPLAYER SYNC (Jornada Compartida) ---
 
 /**
+ * updateHostName
+ * Updates the host name for today's tournament.
+ * Creates a placeholder tournament if none exists.
+ */
+export const updateHostName = async (hostName: string) => {
+    console.log("🌍 SYNC: Updating host name:", hostName);
+    const today = new Date().toISOString().split('T')[0];
+
+    try {
+        // 1. Check if a tournament exists for today
+        const { data: existing, error: fetchError } = await supabase
+            .from('tournaments')
+            .select('id')
+            .eq('date', today)
+            .maybeSingle();
+
+        if (fetchError) throw fetchError;
+
+        if (existing) {
+            // Update existing tournament
+            const { error: updateError } = await supabase
+                .from('tournaments')
+                .update({ host_name: hostName })
+                .eq('id', existing.id);
+
+            if (updateError) throw updateError;
+            return { success: true, tournamentId: existing.id };
+        } else {
+            // Create placeholder tournament (will be fully configured later)
+            // Use a temporary ID that will be replaced when setup is completed
+            const tempId = `temp_${Date.now()}`;
+            const { data: newTournament, error: createError } = await supabase
+                .from('tournaments')
+                .insert({
+                    id: tempId,
+                    date: today,
+                    host_name: hostName,
+                    status: 'planned',
+                    metadata: { placeholder: true }
+                })
+                .select('id')
+                .single();
+
+            if (createError) throw createError;
+            return { success: true, tournamentId: newTournament.id };
+        }
+    } catch (e: any) {
+        console.error("❌ SYNC ERROR (updateHostName):", e);
+        return { success: false, error: e.message };
+    }
+};
+
+/**
  * setActiveTournament
  * Publishes the given tournament ID as the GLOBALLY ACTIVE tournament.
  * Called by Host upon finishing setup.
@@ -257,10 +310,37 @@ export const setActiveTournament = async (tournamentId: string) => {
  * deactivateTournament
  * Clears the active tournament from the global configuration.
  * Stops clients from re-hydrating an ended tournament.
+ * V4.9: Also clears host_name from tournaments table
  */
 export const deactivateTournament = async () => {
     console.log("🌍 SYNC: Deactivating GLOBAL tournament...");
     try {
+        // 1. Get current active tournament ID
+        const { data: appState } = await supabase
+            .from('app_state')
+            .select('value')
+            .eq('key', 'global_config')
+            .single();
+
+        const activeTournamentId = appState?.value?.active_tournament_id;
+
+        // 2. Clear host_name from tournaments table if there's an active tournament
+        if (activeTournamentId) {
+            console.log("🧹 Clearing host_name from tournament:", activeTournamentId);
+            await supabase
+                .from('tournaments')
+                .update({ host_name: null })
+                .eq('id', activeTournamentId);
+        }
+
+        // 3. Also clear host_name from today's tournament (in case it's a different one)
+        const today = new Date().toISOString().split('T')[0];
+        await supabase
+            .from('tournaments')
+            .update({ host_name: null })
+            .eq('date', today);
+
+        // 4. Deactivate tournament in app_state
         const { error } = await supabase
             .from('app_state')
             .upsert({
@@ -270,6 +350,7 @@ export const deactivateTournament = async () => {
             });
 
         if (error) throw error;
+        console.log("✅ Tournament and host_name cleared");
         return { success: true };
     } catch (e: any) {
         console.error("❌ SYNC ERROR (deactivate):", e);
