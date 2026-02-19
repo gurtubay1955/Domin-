@@ -61,6 +61,8 @@ interface TournamentState {
     syncMatch: (match: MatchRecord) => void; // ☁️ V4.1: Recibir de la nube
     syncMatches: (matches: MatchRecord[]) => void; // ☁️ V4.2: Polling Fallback
     syncLiveMatch: (data: LiveMatchData) => void; // 🔴 V4.5: Update live score
+    removeLiveScore: (pairA: number, pairB: number) => void; // 🧹 V5.0: Realtime DELETE
+    setLiveScores: (fullList: LiveMatchData[]) => void; // 🔄 V5.0: Full Replace (Polling)
     clearTournament: () => void;
     getPairNames: (pairId: number) => string[];
 
@@ -212,6 +214,45 @@ export const useTournamentStore = create<TournamentState>()(
                             [key]: data
                         }
                     };
+                });
+            },
+
+            // 🧹 V5.0: REMOVE LIVE MATCH (Realtime DELETE)
+            removeLiveScore: (pairA, pairB) => {
+                set((state) => {
+                    const key = `${pairA}-${pairB}`;
+                    if (!state.liveScores[key]) return state; // No-op
+
+                    console.log(`🗑️ STORE: Removing live match ${key}`);
+                    const { [key]: _, ...rest } = state.liveScores;
+                    return { liveScores: rest };
+                });
+            },
+
+            // 🔄 V5.0: SET FULL LIVE SCORES (Polling Replacement)
+            setLiveScores: (fullList) => {
+                set((state) => {
+                    const newLive: Record<string, LiveMatchData> = {};
+
+                    fullList.forEach(data => {
+                        // ZOMBIE CHECK (Redundant but safe)
+                        const historyExists = state.matchHistory.some(m => {
+                            const mPA = Math.min(m.myPair, m.oppPair);
+                            const mPB = Math.max(m.myPair, m.oppPair);
+                            return mPA === data.pairA && mPB === data.pairB;
+                        });
+
+                        if (!historyExists) {
+                            const key = `${data.pairA}-${data.pairB}`;
+                            newLive[key] = data;
+                        }
+                    });
+
+                    // Compare keys to avoid unnecessary re-renders? 
+                    // Zustand does shallow compare, but creating new object always triggers.
+                    // But this runs every 2s. Is it okay? Yes, functionality is priority.
+
+                    return { liveScores: newLive };
                 });
             },
 

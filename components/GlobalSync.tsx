@@ -173,28 +173,31 @@ export default function GlobalSync() {
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'live_matches', filter: `tournament_id=eq.${tournamentId}` },
                 (payload: any) => {
-                    console.log("📥 RAW LIVE_MATCHES PAYLOAD:", payload);
-                    const { syncLiveMatch } = useTournamentStore.getState();
+                    // console.log("📥 RAW LIVE_MATCHES PAYLOAD:", payload);
+                    const { syncLiveMatch, removeLiveScore } = useTournamentStore.getState();
 
                     if (payload.eventType === 'DELETE') {
-                        // We rely on the store's syncMatch logic (when final match arrives) to clear it,
-                        // OR we could explicitly clear it here.
-                        // For now, let's just log. Clearing is handled by 'addMatch' or 'syncMatch' usually.
-                        // Actually, better to clear it if we can. 
-                        // But payload.old only has ID usually? No, supabase sends full OLD record for REPLICA identity full?
-                        // Default identity is PK. PK is tournament_id, pair_a, pair_b.
-                        // So payload.old should have those.
-                        // Let's implement specific delete action later if needed. 
-                        // For now, the "Completed Match" event arriving (Step A) clears it.
-                        // BUT if someone just exits the game without saving? Then it lingers.
-                        // Use deleteLiveMatch in ScoreBoard clears it.
-                        console.log("🗑️ LIVE_MATCHES DELETE event");
+                        const old = payload.old;
+                        console.log("🗑️ LIVE_MATCHES DELETE event:", old);
+                        // We need pair_a and pair_b
+                        // Supabase replica identity 'FULL' is needed to get old values, 
+                        // OR if it's the PK. Our PK is (tournament_id, pair_a, pair_b).
+                        // So payload.old SHOULD contain them.
+                        if (old && old.pair_a && old.pair_b) {
+                            removeLiveScore(old.pair_a, old.pair_b);
+                        } else {
+                            // If we don't get IDs, we can't remove seamlessly. 
+                            // Fallback: Polling will clean it up in <2s.
+                            console.warn("⚠️ DELETE event missing keys. Waiting for polling to cleanup.");
+                        }
                         return;
                     }
 
                     const m = payload.new;
-                    console.log(`🔴 LIVE SYNC EVENT: ${m.pair_a} vs ${m.pair_b} (${m.score_a}-${m.score_b}, hand=${m.hand_number})`);
+                    // console.log(`🔴 LIVE SYNC EVENT: ${m.pair_a} vs ${m.pair_b}`);
 
+                    // 🛡️ ZOMBIE SHIELD: Handled inside store now via `syncLiveMatch` logic?
+                    // Actually store logic has the check.
                     syncLiveMatch({
                         tournamentId: m.tournament_id,
                         pairA: m.pair_a,
@@ -204,8 +207,6 @@ export default function GlobalSync() {
                         handNumber: m.hand_number,
                         lastUpdated: m.last_updated
                     });
-
-                    console.log("✅ syncLiveMatch called - store should be updated");
                 }
             )
             .subscribe((status) => {
@@ -222,11 +223,10 @@ export default function GlobalSync() {
             }
         }, 5000); // 5 seconds (Reduced from 10s for better responsiveness)
 
-        // D. V4.9 POLLING FALLBACK FOR LIVE MATCHES (Every 2s)
-        // Safari mobile suspends WebSocket connections when app goes to background
-        // ENFORCED BY DOCUMENTO RECTOR v1.2 (Step 12: 2s Latency)
+        // D. V5.0 AUTHORITATIVE POLLING FOR LIVE MATCHES (Every 2s)
+        // REPLACES "Additive Only" with "Full Replace"
         const liveMatchesIntervalId = setInterval(async () => {
-            console.log("🔄 POLLING: Checking live_matches (2s)...");
+            // console.log("🔄 POLLING: Checking live_matches (2s)...");
             const { data, error } = await supabase
                 .from('live_matches')
                 .select('*')
@@ -237,35 +237,22 @@ export default function GlobalSync() {
                 return;
             }
 
-            if (data && data.length > 0) {
-                const { syncLiveMatch } = useTournamentStore.getState();
-                data.forEach((m: any) => {
-                    // 🛡️ ZOMBIE SHIELD (V4.9 FIX)
-                    // If this match is already in our history, IT IS A ZOMBIE. Ignore it.
-                    const { matchHistory } = useTournamentStore.getState();
-                    const isFinished = matchHistory.some(hist => {
-                        const hPA = Math.min(hist.myPair, hist.oppPair);
-                        const hPB = Math.max(hist.myPair, hist.oppPair);
-                        return hPA === m.pair_a && hPB === m.pair_b;
-                    });
+            // ALWAYS UPDATE STORE using setLiveScores
+            // If data is empty [], store becomes empty {}. ZOMBIES KILLED.
+            const { setLiveScores } = useTournamentStore.getState();
 
-                    if (isFinished) {
-                        console.warn(`🧟 ZOMBIE BLOCKED: Live match ${m.pair_a} vs ${m.pair_b} is already in history. Ignoring.`);
-                        return;
-                    }
+            const cleanList = (data || []).map((m: any) => ({
+                tournamentId: m.tournament_id,
+                pairA: m.pair_a,
+                pairB: m.pair_b,
+                scoreA: m.score_a,
+                scoreB: m.score_b,
+                handNumber: m.hand_number,
+                lastUpdated: m.last_updated
+            }));
 
-                    // console.log(`🔄 POLLING: Found live match ${m.pair_a} vs ${m.pair_b}`);
-                    syncLiveMatch({
-                        tournamentId: m.tournament_id,
-                        pairA: m.pair_a,
-                        pairB: m.pair_b,
-                        scoreA: m.score_a,
-                        scoreB: m.score_b,
-                        handNumber: m.hand_number,
-                        lastUpdated: m.last_updated
-                    });
-                });
-            }
+            setLiveScores(cleanList);
+
         }, 2000); // 2 seconds (CRITICAL REQUIREMENT)
 
         return () => {
