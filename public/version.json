@@ -1,9 +1,9 @@
 {
-  "version": "6.0.4",
-  "buildTime": "2026-02-19T04:18:00Z",
+  "version": "5.5.1",
+  "buildTime": "2026-02-19T04:20:33Z",
   "features": [
-    "Hotfix: Removed visual counter causing crash",
-    "Global Auditor (Active in Background)",
-    "True Server Authority"
+    "Real-time host sync",
+    "Real-time opponent selection sync",
+    "Auto-update system"
   ]
 }
