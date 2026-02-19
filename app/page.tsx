@@ -19,7 +19,7 @@ import { OFFICIAL_PLAYERS } from '@/lib/constants';
 import { useTournamentStore } from "@/lib/store"; // Quantum Store
 import { useRouter } from 'next/navigation';
 import PinGuard from '@/components/PinGuard'; // Import Guard
-import { supabase } from '@/lib/supabaseClient'; // For real-time subscription
+
 
 // Imports removed (Moved to GlobalSync)
 
@@ -35,6 +35,7 @@ export default function Home() {
     isSetupComplete,
     hostName,
     pairs,
+    matchHistory,
     // pairUuidMap, (Removed - used in GlobalSync)
     // initializeTournament, (Removed - used in GlobalSync)
     // syncMatch, (Removed - used in GlobalSync)
@@ -311,7 +312,7 @@ export default function Home() {
         {/* Footer Info */}
         <div className="flex flex-col items-center gap-6 opacity-40 text-xl text-center font-bold tracking-widest mt-8">
           <Users size={18} />
-          <span>SISTEMA V5.4 (INFALLIBLE)</span>
+          <span>SISTEMA V6.0 (AUDITOR) • {matchHistory.length} PARTIDAS RECUPERADAS</span>
         </div>
 
         <div className="flex gap-6 mt-4">
