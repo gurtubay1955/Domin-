@@ -14,7 +14,7 @@ import { useEffect, useState } from 'react';
  * 3. If different, shows notification and reloads after 3 seconds
  */
 
-const CURRENT_VERSION = "5.3.0";
+const CURRENT_VERSION = "5.4.0";
 const CHECK_INTERVAL = 30000; // 30 seconds
 const RELOAD_DELAY = 3000; // 3 seconds
 

@@ -1,9 +1,9 @@
 {
-  "version": "5.3.0",
-  "buildTime": "2026-02-18T23:37:28Z",
+  "version": "5.4.0",
+  "buildTime": "2026-02-18T23:55:28Z",
   "features": [
-    "Zombie Shield (Anti-Ghost Matches)",
-    "Server-Side Live Match Cleanup",
-    "Infallible Sync Protocol"
+    "True Server Authority (Full Sync)",
+    "Atomic State Replacement",
+    "Realtime DELETE Events"
   ]
 }
