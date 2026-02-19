@@ -19,7 +19,7 @@ import { OFFICIAL_PLAYERS } from '@/lib/constants';
 import { useTournamentStore } from "@/lib/store"; // Quantum Store
 import { useRouter } from 'next/navigation';
 import PinGuard from '@/components/PinGuard'; // Import Guard
-
+import { supabase } from '@/lib/supabaseClient'; // For real-time subscription
 
 // Imports removed (Moved to GlobalSync)
 
@@ -35,7 +35,6 @@ export default function Home() {
     isSetupComplete,
     hostName,
     pairs,
-    // matchHistory, (Removed - used in GlobalSync)
     // pairUuidMap, (Removed - used in GlobalSync)
     // initializeTournament, (Removed - used in GlobalSync)
     // syncMatch, (Removed - used in GlobalSync)
@@ -51,8 +50,6 @@ export default function Home() {
     // If store has a name, use it. If not, clear it.
     setDisplayHost(hostName || "");
   }, [hostName]);
-
-
 
   // Effect: Set the current date ON MOUNT & Fetch Round Number
   const [roundNumber, setRoundNumber] = useState(1);
@@ -104,7 +101,7 @@ export default function Home() {
           table: 'tournaments',
           filter: `date=eq.${today}`
         },
-        (payload: any) => {
+        (payload) => {
           console.log('🔥 HOST UPDATE:', payload);
           if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
             const newHost = (payload.new as any)?.host_name;
@@ -314,7 +311,7 @@ export default function Home() {
         {/* Footer Info */}
         <div className="flex flex-col items-center gap-6 opacity-40 text-xl text-center font-bold tracking-widest mt-8">
           <Users size={18} />
-          <span>SISTEMA V5.5 (STABLE ROLLBACK)</span>
+          <span>SISTEMA V5.3 (ANTI-ZOMBIE)</span>
         </div>
 
         <div className="flex gap-6 mt-4">

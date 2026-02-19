@@ -1,9 +1,9 @@
 {
-  "version": "5.5.1",
-  "buildTime": "2026-02-19T04:20:33Z",
+  "version": "5.4.1",
+  "buildTime": "2026-02-19T04:26:00Z",
   "features": [
-    "Real-time host sync",
-    "Real-time opponent selection sync",
-    "Auto-update system"
+    "Emergency Restore to v5.4 State",
+    "True Server Authority",
+    "Stable Release"
   ]
 }
