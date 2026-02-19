@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:lan": "next dev -H 0.0.0.0",
+    "prebuild": "./bump_version.sh",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint"
