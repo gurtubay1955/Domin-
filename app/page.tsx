@@ -311,7 +311,7 @@ export default function Home() {
         {/* Footer Info */}
         <div className="flex flex-col items-center gap-6 opacity-40 text-xl text-center font-bold tracking-widest mt-8">
           <Users size={18} />
-          <span>SISTEMA V4.9 (AUTO-SYNC)</span>
+          <span>SISTEMA V5.2 (HIGHLANDER)</span>
         </div>
 
         <div className="flex gap-6 mt-4">
