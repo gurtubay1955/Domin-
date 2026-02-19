@@ -325,13 +325,7 @@ export default function Home() {
         {/* Footer Info */}
         <div className="flex flex-col items-center gap-6 opacity-40 text-xl text-center font-bold tracking-widest mt-8">
           <Users size={18} />
-          {/* HYDRATION FIX: Only show dynamic data on client */}
-          <span>
-            SISTEMA V6.0.3 (AUDITOR)
-            {matchHistory && matchHistory.length > 0 && (
-              <> • {matchHistory.length} PARTIDAS RECUPERADAS</>
-            )}
-          </span>
+          <span>SISTEMA V6.0.4 (AUDITOR ACTIVO)</span>
         </div>
 
         <div className="flex gap-6 mt-4">
