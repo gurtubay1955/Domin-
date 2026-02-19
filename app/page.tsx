@@ -52,6 +52,19 @@ export default function Home() {
     setDisplayHost(hostName || "");
   }, [hostName]);
 
+  // HYDRATION SAFETY
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => { setIsMounted(true); }, []);
+
+  if (!isMounted) {
+    // Return a skeleton or valid initial HTML to match server
+    // prevents flash of content/mismatch
+    return null;
+    // OR better: Return the structure without dynamic data?
+    // For this app, returning null during hydration is safest to avoid crash,
+    // but might cause SEO blink. Let's return structure with empty values.
+  }
+
   // Effect: Set the current date ON MOUNT & Fetch Round Number
   const [roundNumber, setRoundNumber] = useState(1);
 
@@ -312,7 +325,13 @@ export default function Home() {
         {/* Footer Info */}
         <div className="flex flex-col items-center gap-6 opacity-40 text-xl text-center font-bold tracking-widest mt-8">
           <Users size={18} />
-          <span>SISTEMA V6.0.1 (AUDITOR) • {matchHistory.length} PARTIDAS RECUPERADAS</span>
+          {/* HYDRATION FIX: Only show dynamic data on client */}
+          <span>
+            SISTEMA V6.0.3 (AUDITOR)
+            {matchHistory && matchHistory.length > 0 && (
+              <> • {matchHistory.length} PARTIDAS RECUPERADAS</>
+            )}
+          </span>
         </div>
 
         <div className="flex gap-6 mt-4">
