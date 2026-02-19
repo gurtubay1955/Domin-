@@ -240,6 +240,20 @@ export default function GlobalSync() {
             if (data && data.length > 0) {
                 const { syncLiveMatch } = useTournamentStore.getState();
                 data.forEach((m: any) => {
+                    // 🛡️ ZOMBIE SHIELD (V4.9 FIX)
+                    // If this match is already in our history, IT IS A ZOMBIE. Ignore it.
+                    const { matchHistory } = useTournamentStore.getState();
+                    const isFinished = matchHistory.some(hist => {
+                        const hPA = Math.min(hist.myPair, hist.oppPair);
+                        const hPB = Math.max(hist.myPair, hist.oppPair);
+                        return hPA === m.pair_a && hPB === m.pair_b;
+                    });
+
+                    if (isFinished) {
+                        console.warn(`🧟 ZOMBIE BLOCKED: Live match ${m.pair_a} vs ${m.pair_b} is already in history. Ignoring.`);
+                        return;
+                    }
+
                     // console.log(`🔄 POLLING: Found live match ${m.pair_a} vs ${m.pair_b}`);
                     syncLiveMatch({
                         tournamentId: m.tournament_id,

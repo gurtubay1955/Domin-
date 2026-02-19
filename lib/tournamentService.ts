@@ -135,6 +135,20 @@ export const recordMatch = async (match: MatchRecord) => {
 
         if (mError) throw new Error(mError.message);
 
+        // 🧹 V4.9 CLEANUP: DESTROY LIVE MATCH ROW (Anti-Zombie)
+        // We must delete the row where these pairs were playing.
+        // live_matches key is tournament_id + pair_a + pair_b
+        const pA = Math.min(match.myPair, match.oppPair);
+        const pB = Math.max(match.myPair, match.oppPair);
+
+        console.log(`🧹 SERVICE: Deleting live_matches row for ${pA} vs ${pB}`);
+        await supabase
+            .from('live_matches')
+            .delete()
+            .eq('tournament_id', match.tournamentId)
+            .eq('pair_a', pA)
+            .eq('pair_b', pB);
+
         return { success: true };
 
     } catch (e: any) {
