@@ -135,23 +135,20 @@ export default function ScoreBoard({
             };
             sessionStorage.setItem("activeMatch_hands", JSON.stringify(dataToSave));
 
-            // 2. Cloud Broadcast (Live Progress)
-            // Debounce slightly to avoid spamming on every keypress if we had one, 
-            // but here we update on 'hands' array change which happens on ENTER.
+            // 2. Cloud Broadcast (Live Progress) - INSTANT "Texas Hold'em" Style
+            // Removed debounce (500ms) to ensure real-time fluidity.
+            // Frequency: Human input speed (max 1-2 ops/sec), safe for Supabase.
             if (tournamentId) {
-                const timeoutId = setTimeout(() => {
-                    import('@/lib/tournamentService').then(({ updateLiveMatch }) => {
-                        updateLiveMatch(
-                            tournamentId,
-                            config.pairA!,
-                            config.pairB!,
-                            totalA,
-                            totalB,
-                            hands.length
-                        );
-                    });
-                }, 500);
-                return () => clearTimeout(timeoutId);
+                import('@/lib/tournamentService').then(({ updateLiveMatch }) => {
+                    updateLiveMatch(
+                        tournamentId,
+                        config.pairA!,
+                        config.pairB!,
+                        totalA,
+                        totalB,
+                        hands.length
+                    );
+                });
             }
         }
     }, [hands, config, isInitialized, tournamentId, totalA, totalB]);

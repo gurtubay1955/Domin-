@@ -176,14 +176,42 @@ export default function TableSelectPage() {
         <div className="min-h-screen bg-[#4A3B32] text-[#FDFBF7] font-hand p-4 pb-20">
             {/* Header */}
             <div className="flex flex-col items-center justify-center text-center relative mb-10 pt-6">
-                <div className="z-10 bg-[#4A3B32]/80 backdrop-blur-sm p-4 rounded-3xl border border-white/5 shadow-2xl">
+                <div className="z-10 bg-[#4A3B32]/80 backdrop-blur-sm p-4 rounded-3xl border border-white/5 shadow-2xl relative">
                     <h1 className="text-5xl font-black mb-2 tracking-tight text-[#FFD54F] drop-shadow-md">Mesa de Control</h1>
                     <p className="opacity-80 text-2xl font-medium">
                         Hola, <span className="text-[#A5D6A7] font-bold">{currentUser}</span>
                     </p>
-                    <p className="opacity-60 text-2xl">
+                    <p className="opacity-60 text-2xl mb-2">
                         Pareja #{myPairNum} (con {myPartner})
                     </p>
+
+                    {/* 🔧 V5.1 DEBUG: ID VISIBILITY & MANUAL SYNC */}
+                    <div className="flex items-center justify-center gap-2 mt-2 pt-2 border-t border-white/10">
+                        <span className="text-xs font-mono opacity-30 tracking-widest">
+                            ID: {tournamentId?.slice(0, 8)}...
+                        </span>
+                        <button
+                            onClick={() => {
+                                const { syncMatches } = useTournamentStore.getState();
+                                // Manual Trigger
+                                import('@/lib/tournamentService').then(async ({ fetchMatches }) => {
+                                    if (tournamentId) {
+                                        const { success, matches } = await fetchMatches(tournamentId);
+                                        if (success && matches) {
+                                            syncMatches(matches);
+                                            alert(`✅ Sincronizado: ${matches.length} partidas encontradas.`);
+                                        } else {
+                                            alert("⚠️ Error al sincronizar.");
+                                        }
+                                    }
+                                });
+                            }}
+                            className="p-1.5 bg-white/5 rounded-full hover:bg-white/20 transition-all text-xs font-bold text-[#A5D6A7] flex items-center gap-1"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M3 21v-5h5" /></svg>
+                            SYNC
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -211,13 +239,11 @@ export default function TableSelectPage() {
                             </p>
                         </div>
                     ) : (
-                        // LIVE MATCHES SUBSCRIPTION COMPONENT
-                        <LiveMatchesHandler
-                            tournamentId={tournamentId}
+                        // LIVE MATCHES from Global Store
+                        <LiveMatchesRender
                             availableOpponents={availableOpponents}
                             opponentPairNum={opponentPairNum}
                             setOpponentPairNum={setOpponentPairNum}
-                            myPairNum={myPairNum}
                             totalExpectedPerPair={totalExpectedPerPair}
                             getGamesPlayed={getGamesPlayed}
                         />
@@ -360,69 +386,20 @@ export default function TableSelectPage() {
 }
 
 /**
- * LIVE MATCHES HANDLER COMPONENT (Extracted for better React Hooks compliance)
+ * LIVE MATCHES RENDERER (Pure Component - No Subscription)
+ * Uses global store state via props or directly if connected.
+ * Since we passed props safely via parent, we can just use store here too or props.
+ * Let's use the store directly for cleaner code in NextJS client components.
  */
-function LiveMatchesHandler({
-    tournamentId,
+function LiveMatchesRender({
     availableOpponents,
     opponentPairNum,
     setOpponentPairNum,
-    myPairNum,
     totalExpectedPerPair,
     getGamesPlayed
 }: any) {
-    const [liveMatches, setLiveMatches] = useState<Record<string, { scoreA: number, scoreB: number, hand: number }>>({});
-
-    useEffect(() => {
-        if (!tournamentId) return;
-
-        console.log("📡 Subscribing to LIVE matches...");
-        const channel = supabase
-            .channel('live_scores')
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'live_matches', filter: `tournament_id=eq.${tournamentId}` },
-                (payload) => {
-                    console.log("🔥 LIVE UPDATE:", payload);
-                    const fetchLiveMatches = async () => {
-                        const { data } = await supabase
-                            .from('live_matches')
-                            .select('*')
-                            .eq('tournament_id', tournamentId);
-
-                        if (data) {
-                            const map: Record<string, any> = {};
-                            data.forEach(m => {
-                                map[`${m.pair_a}-${m.pair_b}`] = { scoreA: m.score_a, scoreB: m.score_b, hand: m.hand_number };
-                            });
-                            setLiveMatches(map);
-                        }
-                    }
-                    fetchLiveMatches();
-                }
-            )
-            .subscribe();
-
-        const fetchLiveMatches = async () => {
-            const { data } = await supabase
-                .from('live_matches')
-                .select('*')
-                .eq('tournament_id', tournamentId);
-
-            if (data) {
-                const map: Record<string, any> = {};
-                data.forEach(m => {
-                    // Key: "min-max" pair IDs
-                    map[`${m.pair_a}-${m.pair_b}`] = { scoreA: m.score_a, scoreB: m.score_b, hand: m.hand_number };
-                });
-                setLiveMatches(map);
-            }
-        };
-
-        fetchLiveMatches();
-
-        return () => { supabase.removeChannel(channel); };
-    }, [tournamentId]);
+    // 🔴 V4.9 FIX: Use Global Store directly
+    const { liveScores } = useTournamentStore();
 
     return (
         <div className="grid grid-cols-1 gap-3">
@@ -432,7 +409,8 @@ function LiveMatchesHandler({
                 const gamesPlayed = getGamesPlayed(pNum);
 
                 // Check active status
-                const activeMatch = Object.entries(liveMatches).find(([key]) => key.startsWith(`${pNum}-`) || key.endsWith(`-${pNum}`));
+                // liveScores keys are "min-max"
+                const activeMatch = Object.entries(liveScores).find(([key]) => key.startsWith(`${pNum}-`) || key.endsWith(`-${pNum}`));
 
                 let liveBadge = null;
                 if (activeMatch) {
@@ -441,7 +419,7 @@ function LiveMatchesHandler({
                     const isPairA = pNum === pA;
                     const myScore = isPairA ? data.scoreA : data.scoreB;
                     const oppScore = isPairA ? data.scoreB : data.scoreA;
-                    const handNumber = data.hand || 0;
+                    const handNumber = data.handNumber || 0;
 
                     // 🔴 V4.8: Distinguish between SEATED (hand=0) and PLAYING (hand>0)
                     if (handNumber === 0) {

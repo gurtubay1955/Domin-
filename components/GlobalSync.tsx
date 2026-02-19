@@ -57,7 +57,7 @@ export default function GlobalSync() {
                 const { success: cSuccess, config } = await fetchTournamentConfig(cloudId);
 
                 if (cSuccess && config) {
-                    // 2. Fetch History
+                    // 2. Fetch History (Initial Full Load)
                     const { success: mSuccess, matches } = await fetchMatches(cloudId);
 
                     if (mSuccess && matches) {
@@ -70,6 +70,16 @@ export default function GlobalSync() {
                             config.pairIds
                         );
                     }
+                }
+            } else {
+                // 🔴 V5 FIX: ALWAYS FETCH HISTORY ON SYNC (Catch-up)
+                // Even if we are already hydrated, we might have missed matches while backgrounded/offline.
+                // This ensures the "Global Progress Bar" is accurate for everyone.
+                console.log("📥 SYNC: Verifying Global Match History (Catch-up)...", { cloudId });
+                const { success: mSuccess, matches } = await fetchMatches(cloudId);
+                if (mSuccess && matches) {
+                    // console.log(`💧 CATCH-UP: ${matches.length} matches found.`);
+                    syncMatches(matches);
                 }
             }
         };
@@ -202,7 +212,7 @@ export default function GlobalSync() {
                 console.log("📡 live_matches subscription status:", status);
             });
 
-        // C. V4.2 POLLING FALLBACK (Every 10s) - Completed Matches
+        // C. V4.2 POLLING FALLBACK (Every 5s) - Completed Matches
         const matchesIntervalId = setInterval(async () => {
             // console.log("🔄 GLOBAL POLLING: Checking for new matches...");
             const { success, matches } = await fetchMatches(tournamentId);
@@ -210,12 +220,13 @@ export default function GlobalSync() {
                 const { syncMatches } = useTournamentStore.getState();
                 syncMatches(matches);
             }
-        }, 10000); // 10 seconds
+        }, 5000); // 5 seconds (Reduced from 10s for better responsiveness)
 
-        // D. V4.9 POLLING FALLBACK FOR LIVE MATCHES (Every 5s)
+        // D. V4.9 POLLING FALLBACK FOR LIVE MATCHES (Every 2s)
         // Safari mobile suspends WebSocket connections when app goes to background
+        // ENFORCED BY DOCUMENTO RECTOR v1.2 (Step 12: 2s Latency)
         const liveMatchesIntervalId = setInterval(async () => {
-            console.log("🔄 POLLING: Checking live_matches...");
+            console.log("🔄 POLLING: Checking live_matches (2s)...");
             const { data, error } = await supabase
                 .from('live_matches')
                 .select('*')
@@ -229,7 +240,7 @@ export default function GlobalSync() {
             if (data && data.length > 0) {
                 const { syncLiveMatch } = useTournamentStore.getState();
                 data.forEach((m: any) => {
-                    console.log(`🔄 POLLING: Found live match ${m.pair_a} vs ${m.pair_b}`);
+                    // console.log(`🔄 POLLING: Found live match ${m.pair_a} vs ${m.pair_b}`);
                     syncLiveMatch({
                         tournamentId: m.tournament_id,
                         pairA: m.pair_a,
@@ -241,7 +252,7 @@ export default function GlobalSync() {
                     });
                 });
             }
-        }, 5000); // 5 seconds
+        }, 2000); // 2 seconds (CRITICAL REQUIREMENT)
 
         return () => {
             supabase.removeChannel(channel);

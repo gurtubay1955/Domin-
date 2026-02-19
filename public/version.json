@@ -1,10 +1,9 @@
 {
-    "version": "4.9.0",
-    "buildTime": "2026-02-14T20:10:00Z",
-    "features": [
-        "Real-time host sync",
-        "Real-time opponent selection sync",
-        "Auto-update system",
-        "Automatic reset sync with polling fallback"
-    ]
+  "version": "4.9.1",
+  "buildTime": "2026-02-18T23:37:28Z",
+  "features": [
+    "Real-time host sync",
+    "Real-time opponent selection sync",
+    "Auto-update system"
+  ]
 }
