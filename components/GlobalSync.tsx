@@ -255,10 +255,35 @@ export default function GlobalSync() {
 
         }, 2000); // 2 seconds (CRITICAL REQUIREMENT)
 
+        // E. V6.1 GLOBAL AUDITOR (Safe Mode - No UI dependencies)
+        // Checks total match count to detect "Islands of Data"
+        const auditorIntervalId = setInterval(async () => {
+            const { matchHistory, tournamentId } = useTournamentStore.getState();
+            if (!tournamentId) return;
+
+            // console.log("🕵️ AUDITOR: Checking match integrity...");
+            const { count, error } = await supabase
+                .from('matches')
+                .select('*', { count: 'exact', head: true })
+                .eq('tournament_id', tournamentId);
+
+            if (error || count === null) return;
+
+            if (count !== matchHistory.length) {
+                console.warn(`🕵️ AUDITOR: Discrepancy detected! Remote=${count}, Local=${matchHistory.length}. Forcing Sync...`);
+                const { success, matches } = await fetchMatches(tournamentId);
+                if (success && matches) {
+                    const { syncMatches } = useTournamentStore.getState();
+                    syncMatches(matches);
+                }
+            }
+        }, 5000);
+
         return () => {
             supabase.removeChannel(channel);
             clearInterval(matchesIntervalId);
             clearInterval(liveMatchesIntervalId);
+            clearInterval(auditorIntervalId);
         };
 
     }, [tournamentId]); // Only re-sub if tournamentId changes
