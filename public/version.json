@@ -1,9 +1,9 @@
 {
-  "version": "5.2.0",
+  "version": "5.3.0",
   "buildTime": "2026-02-18T23:37:28Z",
   "features": [
-    "Highlander Protocol (Anti-Split Brain)",
-    "Automatic Versioning in Build",
-    "Real-time Host Guard"
+    "Zombie Shield (Anti-Ghost Matches)",
+    "Server-Side Live Match Cleanup",
+    "Infallible Sync Protocol"
   ]
 }
