@@ -1,9 +1,9 @@
 {
-  "version": "4.9.1",
+  "version": "5.2.0",
   "buildTime": "2026-02-18T23:37:28Z",
   "features": [
-    "Real-time host sync",
-    "Real-time opponent selection sync",
-    "Auto-update system"
+    "Highlander Protocol (Anti-Split Brain)",
+    "Automatic Versioning in Build",
+    "Real-time Host Guard"
   ]
 }
