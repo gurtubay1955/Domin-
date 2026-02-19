@@ -107,13 +107,19 @@ export const useTournamentStore = create<TournamentState>()(
                     _hasHydrated: true // Marcar como hidratado
                 });
 
-                // ☁️ SYNC: Crear en Supabase (Side Effect) - Solo si somos Host (lógica externa lo decide, pero upsert es seguro)
-                import('./tournamentService').then(({ createTournament }) => {
-                    createTournament(id, host, pairs).then(res => {
-                        if (res.success) console.log("✅ Torneo sincronizado en nube");
-                        else console.warn("⚠️ Falló sincronización de torneo:", res.error);
+                // ☁️ SYNC: Crear en Supabase (Side Effect)
+                // Solo creamos si el pairUuidMap está vacío (lo cual indica nueva creación local)
+                // Los invitados que hidratan desde la nube ya reciben el pairUuidMap lleno.
+                if (Object.keys(pairUuidMap).length === 0) {
+                    import('./tournamentService').then(({ createTournament }) => {
+                        createTournament(id, host, pairs).then(res => {
+                            if (res.success) console.log("✅ Torneo sincronizado en nube");
+                            else console.warn("⚠️ Falló sincronización de torneo:", res.error);
+                        });
                     });
-                });
+                } else {
+                    console.log("ℹ️ STORE: Torneo ya hidratado desde nube, saltando creación.");
+                }
             },
 
             addMatch: (match) => {
@@ -386,9 +392,15 @@ export const useTournamentStore = create<TournamentState>()(
                     sessionStorage.clear();
                 }
 
-                // 6. Recarga con parámetro anti-caché
-                const reloadUrl = `${window.location.origin}/?reset_nuclear=${Date.now()}`;
-                window.location.href = reloadUrl;
+                // 0. RESET REMOTO (DEACTIVATE TOURNAMENT)
+                // Importamos dinámicamente para no crear ciclo
+                import('./tournamentService').then(async ({ deactivateTournament }) => {
+                    await deactivateTournament();
+
+                    // 6. Recarga con parámetro anti-caché
+                    const reloadUrl = `${window.location.origin}/?reset_nuclear=${Date.now()}`;
+                    window.location.href = reloadUrl;
+                });
             },
 
             // Para compatibilidad con código antiguo

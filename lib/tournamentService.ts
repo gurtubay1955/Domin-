@@ -46,7 +46,13 @@ export const createTournament = async (tournamentId: string, hostName: string, p
 
         if (tError) throw new Error(`Tournament Error: ${tError.message}`);
 
-        // 2. Create Pairs Records
+        // 2. Clear Existing Pairs (Atomic Cleanup to prevent duplicates)
+        await supabase
+            .from('pairs')
+            .delete()
+            .eq('tournament_id', tournamentId);
+
+        // 3. Create Pairs Records
         const pairsToInsert = Object.entries(pairs).map(([idStr, names]) => ({
             tournament_id: tournamentId,
             pair_number: parseInt(idStr),
