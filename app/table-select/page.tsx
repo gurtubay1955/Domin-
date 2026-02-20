@@ -366,7 +366,7 @@ export default function TableSelectPage() {
                     />
                     <div className="absolute inset-0 flex items-center justify-center">
                         <p className="text-xl font-bold text-[#1B5E20] drop-shadow-sm">
-                            {Math.round((matchHistory.length / totalExpectedTournament) * 100)}%
+                            {matchHistory.length} / {totalExpectedTournament}
                         </p>
                     </div>
                 </div>

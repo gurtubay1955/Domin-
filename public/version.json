@@ -1,9 +1,9 @@
 {
-  "version": "6.1.5",
-  "buildTime": "2026-02-19T20:25:00Z",
+  "version": "6.1.11",
+  "buildTime": "2026-02-20T20:57:25Z",
   "features": [
-    "Identity Chaos Shield",
-    "Duplicate Pairs Fix",
-    "Global Counter Sync (v2)"
+    "Real-time host sync",
+    "Real-time opponent selection sync",
+    "Auto-update system"
   ]
 }

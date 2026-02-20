@@ -106,20 +106,6 @@ export const useTournamentStore = create<TournamentState>()(
                     isSetupComplete: true,
                     _hasHydrated: true // Marcar como hidratado
                 });
-
-                // ☁️ SYNC: Crear en Supabase (Side Effect)
-                // Solo creamos si el pairUuidMap está vacío (lo cual indica nueva creación local)
-                // Los invitados que hidratan desde la nube ya reciben el pairUuidMap lleno.
-                if (Object.keys(pairUuidMap).length === 0) {
-                    import('./tournamentService').then(({ createTournament }) => {
-                        createTournament(id, host, pairs).then(res => {
-                            if (res.success) console.log("✅ Torneo sincronizado en nube");
-                            else console.warn("⚠️ Falló sincronización de torneo:", res.error);
-                        });
-                    });
-                } else {
-                    console.log("ℹ️ STORE: Torneo ya hidratado desde nube, saltando creación.");
-                }
             },
 
             addMatch: (match) => {
@@ -128,14 +114,6 @@ export const useTournamentStore = create<TournamentState>()(
                     const exists = state.matchHistory.some(m => m.id === match.id);
                     if (exists) return state;
 
-                    // ☁️ SYNC: Guardar Match en Supabase
-                    import('./tournamentService').then(({ recordMatch }) => {
-                        recordMatch(match).then(res => {
-                            if (res.success) console.log("✅ Partida guardada en nube");
-                            else console.warn("⚠️ Falló guardado de partida:", res.error);
-                        });
-                    });
-
                     // 🧹 Cleanup Live Score for this match (Atomic update)
                     // Pair A is usually min(myPair, oppPair) in live logic, but let's just clear consistent key
                     const pA = Math.min(match.myPair, match.oppPair);
@@ -143,6 +121,8 @@ export const useTournamentStore = create<TournamentState>()(
                     const key = `${pA}-${pB}`;
 
                     const { [key]: _, ...remainingLive } = state.liveScores;
+
+                    console.log(`🧹 STORE: Partida finalizada en OFF-LINE Fallback. Limpiando marcador en vivo localmente para ${key}`);
 
                     return {
                         matchHistory: [...state.matchHistory, match],
@@ -153,13 +133,13 @@ export const useTournamentStore = create<TournamentState>()(
 
             syncMatch: (match) => {
                 set((state) => {
-                    // Prevenir duplicados (CRÍTICO para eventos realtime)
+                    // Prevenir duplicados estrictos (CRÍTICO para eventos realtime de la misma partida)
                     const exists = state.matchHistory.some(m => m.id === match.id);
                     if (exists) {
-                        return state;
+                        return state; // No hacemos re-render si el ID ya bajó
                     }
 
-                    console.log("📥 SYNC: Partida recibida de la nube", match.id);
+                    console.log("📥 SYNC: Partida FINALIZADA recibida de la nube", match.id);
 
                     // 🧹 Cleanup Live Score (Remote finish)
                     const pA = Math.min(match.myPair, match.oppPair);
@@ -167,6 +147,7 @@ export const useTournamentStore = create<TournamentState>()(
                     const key = `${pA}-${pB}`;
                     const { [key]: _, ...remainingLive } = state.liveScores;
 
+                    // 🟢 SSOT: Siempre creamos un nuevo array de histórico para reactivivdad UI
                     return {
                         matchHistory: [...state.matchHistory, match],
                         liveScores: remainingLive

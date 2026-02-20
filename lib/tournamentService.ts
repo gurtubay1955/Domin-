@@ -60,13 +60,20 @@ export const createTournament = async (tournamentId: string, hostName: string, p
             player2_name: names[1]
         }));
 
-        const { error: pError } = await supabase
+        const { data: pData, error: pError } = await supabase
             .from('pairs')
-            .insert(pairsToInsert);
+            .insert(pairsToInsert)
+            .select();
 
         if (pError) throw new Error(`Pairs Error: ${pError.message}`);
 
-        return { success: true };
+        // Reconstruct pairIds map for the Host to hydrate synchronously
+        const pairIds: Record<string, number> = {};
+        pData?.forEach((p: any) => {
+            pairIds[p.id] = p.pair_number;
+        });
+
+        return { success: true, pairIds };
 
     } catch (e: any) {
         console.error("❌ SERVICE ERROR (createTournament):", e);
@@ -117,14 +124,10 @@ export const recordMatch = async (match: MatchRecord) => {
         const { error: mError } = await supabase
             .from('matches')
             .insert({
-                id: match.id, // Use same UUID from frontend
                 tournament_id: match.tournamentId,
                 pair_a_id: myPairId,
                 pair_b_id: oppPairId,
-                // pair_a_names: JSON.stringify(match.oppNames), // REMOVED DUPLICATE
-                // We'll trust the backend/frontend synchronization later. 
-                // For now, let's send what we have.
-                pair_a_names: ["?", "?"], // specific names hard to get here without store access
+                pair_a_names: ["?", "?"],
                 pair_b_names: match.oppNames,
 
                 score_a: match.scoreMy,

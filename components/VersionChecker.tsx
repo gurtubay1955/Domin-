@@ -47,19 +47,28 @@ export default function VersionChecker() {
                 const serverVersion = data.version;
                 const clientVersion = localStorage.getItem('app_version') || CURRENT_VERSION;
 
+                // AGGRESSIVE PWA KILLER: Always unregister SW in development or mismatched version
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    for (const registration of registrations) {
+                        await registration.unregister();
+                        console.log('💀 Killed Zombie ServiceWorker');
+                    }
+                }
+
                 console.log(`🔍 Version check: Client=${clientVersion}, Server=${serverVersion}`);
 
                 if (serverVersion !== clientVersion) {
-                    console.log('🆕 New version detected! Reloading in 3 seconds...');
+                    console.log('🆕 New version detected! Clearing caches & reloading...');
                     setShowUpdateNotice(true);
-
-                    // Update stored version
                     localStorage.setItem('app_version', serverVersion);
 
-                    // Reload after delay
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, RELOAD_DELAY);
+                    if (window.caches) {
+                        const keys = await window.caches.keys();
+                        await Promise.all(keys.map(k => window.caches.delete(k)));
+                    }
+
+                    setTimeout(() => { window.location.reload(); }, RELOAD_DELAY);
                 }
             } catch (error) {
                 console.error('❌ Version check failed:', error);

@@ -136,9 +136,9 @@ export default function ScoreBoard({
             sessionStorage.setItem("activeMatch_hands", JSON.stringify(dataToSave));
 
             // 2. Cloud Broadcast (Live Progress) - INSTANT "Texas Hold'em" Style
-            // Removed debounce (500ms) to ensure real-time fluidity.
             // Frequency: Human input speed (max 1-2 ops/sec), safe for Supabase.
             if (tournamentId) {
+                console.log(`📡 BROADCAST: ${config.pairA} vs ${config.pairB} | ${totalA}-${totalB} (Hand ${hands.length})`);
                 import('@/lib/tournamentService').then(({ updateLiveMatch }) => {
                     updateLiveMatch(
                         tournamentId,
@@ -153,12 +153,7 @@ export default function ScoreBoard({
         }
     }, [hands, config, isInitialized, tournamentId, totalA, totalB]);
 
-    /**
-     * handleSaveAndExit (CRITICAL)
-     * Commit the match result to history and exit to lobby.
-     * NOW USES: Zustand Store Action
-     */
-    const handleSaveAndExit = () => {
+    const handleSaveAndExit = async () => {
         if (!winner || isSaving) return;
         playClick(); // Feedback for action
         setIsSaving(true);
@@ -166,11 +161,10 @@ export default function ScoreBoard({
         const currentTId = tournamentId || "legacy"; // Store fallback
         const timestamp = Date.now();
 
-        // Generate a deterministic Match ID to prevent duplicates
-        const matchId = `${currentTId}-${config.pairA}-${config.pairB}-${timestamp}`;
-
+        // 🟢 V6.1.7: SSOT (Single Source of Truth)
+        // Let the backend generate the real UUID so we don't duplicate on realtime sync
         const newRecord = {
-            id: matchId, // New unique ID
+            id: "", // Will be assigned by Supabase
             tournamentId: currentTId,
             myPair: config.pairA || 0,
             oppPair: config.pairB || 0,
@@ -189,18 +183,18 @@ export default function ScoreBoard({
             })() as 'double' | 'single' | 'none'
         };
 
-        // ACTION: Dispatch to Store
-        addMatch(newRecord);
+        // ACTION: Dispatch ONLY to DB, wait for it
+        const { recordMatch } = await import('@/lib/tournamentService');
+        const res = await recordMatch(newRecord);
 
-        // ☁️ LIVE: Cleanup (Remove "Playing" status)
-        import('@/lib/tournamentService').then(({ deleteLiveMatch }) => {
-            if (currentTId && config.pairA && config.pairB) {
-                deleteLiveMatch(currentTId, config.pairA, config.pairB);
-            }
-        });
+        if (!res.success) {
+            console.error("❌ FAILED to record match in DB:", res.error);
+            // ⚠️ Fallback of last resort if total offline
+            addMatch({ ...newRecord, id: `${currentTId}-${config.pairA}-${config.pairB}-${timestamp}` });
+        } else {
+            console.log("✅ Match perfectly recorded in Cloud.");
+        }
 
-        // CLEANUP: Remove active match so user isn't stuck in "Game Mode"
-        localStorage.removeItem("activeMatch");
         // CLEANUP: Remove active match so user isn't stuck in "Game Mode"
         localStorage.removeItem("activeMatch");
         sessionStorage.removeItem("activeMatch");

@@ -141,14 +141,37 @@ export default function GlobalSync() {
                 { event: 'INSERT', schema: 'public', table: 'matches', filter: `tournament_id=eq.${tournamentId}` },
                 (payload: any) => {
                     const m = payload.new;
-                    console.log("⚽ GLOBAL MATCH EVENT:", m.id);
+                    console.log("=========================================");
+                    console.log("🚨 ALERTA ROJA: EVENTO [matches] INSERT RECIBIDO 🚨");
+                    console.log("PAYLOAD CRUDO:", JSON.stringify(m, null, 2));
 
-                    const currentMap = useTournamentStore.getState().pairUuidMap;
+                    const currentStore = useTournamentStore.getState();
+                    const currentMap = currentStore.pairUuidMap;
+
+                    console.log("ESTADO ACTUAL 'matchHistory.length' ANTES:", currentStore.matchHistory.length);
+                    console.log("ESTADO ACTUAL 'pairUuidMap':", JSON.stringify(currentMap));
+                    console.log("BUSCANDO PAREJA A (UUID):", m.pair_a_id);
+                    console.log("BUSCANDO PAREJA B (UUID):", m.pair_b_id);
+
                     const pairANum = currentMap[m.pair_a_id] || 0;
                     const pairBNum = currentMap[m.pair_b_id] || 0;
 
+                    console.log("RESULTADO LOCAL: PairA =", pairANum, "| PairB =", pairBNum);
+
                     if (pairANum === 0 || pairBNum === 0) {
-                        console.warn("⚠️ SYNC WARN: Unmapped pairs in realtime event.");
+                        console.error("❌❌ CRÍTICO: EL MAPA ESTABA VACÍO O NO COINCIDÍA. DESCARTANDO EL EVENTO SILENCIOSAMENTE. ❌❌");
+                        // 🟢 V6.1.7: SSOT Crash Prevention.
+                        // If we don't know who this match belongs to, do a full fetch.
+                        import('@/lib/tournamentService').then(async ({ fetchMatches }) => {
+                            console.log("...Ejecutando fetchMatches Fallback...");
+                            const { success, matches } = await fetchMatches(tournamentId);
+                            if (success && matches) {
+                                console.log(`👉 Fallback completado. ${matches.length} partidas inyectadas al Store en Masa.`);
+                                const { syncMatches } = useTournamentStore.getState();
+                                syncMatches(matches);
+                            }
+                        });
+                        return; // ⛔ AQUI MUERE EL FLUJO REGULAR ⛔
                     }
 
                     const matchRecord = {

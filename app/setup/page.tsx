@@ -109,39 +109,54 @@ function SetupContent() {
     // 2. Must have at least 1 valid pair (technically 2 for a match) and even number of players.
     const isValid = activePairs.length > 0 && invalidPairs.length === 0 && totalPlayers % 2 === 0;
 
+    const [isSavingSetup, setIsSavingSetup] = useState(false);
+
     /**
      * handleFinishSetup (CRITICAL)
      * Executed when "Guardar y Comenzar" is clicked.
      * Use this to initialize the "Virgin State" of a new tournament.
      * NOW USES: Zustand Store (Transfiguration of State)
      */
-    const handleFinishSetup = () => {
-        if (!isValid) return;
+    const handleFinishSetup = async () => {
+        if (!isValid || isSavingSetup) return;
+        setIsSavingSetup(true);
 
         // 1. Generate unique tournament ID (UUID for Supabase)
         const tId = generateUUID();
-
-        // 2. Quantum Store Initialization (Local)
-        // This is immediate for the Host
         const finalHost = currentHost || "Anfitrión"; // Fallback
-        useTournamentStore.getState().initializeTournament(tId, finalHost, pairs);
 
-        // 3. V4 MULTIPLAYER SYNC: Publish Global Signal
-        // This wakes up all other clients
-        import('@/lib/tournamentService').then(({ setActiveTournament }) => {
-            setActiveTournament(tId).then(res => {
-                if (!res.success) alert("⚠️ Error al publicar Jornada. Revisa conexión.");
-            });
-        });
+        try {
+            // 2. 🟢 V6.2: STRICT SYNCHRONOUS WAIT FOR DATABASE (Race Condition Fix)
+            const { createTournament, setActiveTournament } = await import('@/lib/tournamentService');
+            const res = await createTournament(tId, finalHost, pairs);
 
-        // 4. Fallback Cleanup (Just in case)
-        localStorage.removeItem("activeMatch");
-        sessionStorage.removeItem("activeMatch");
-        // Legacy cleanup
-        localStorage.removeItem("match_history");
+            if (!res.success || !res.pairIds) {
+                alert("⚠️ Error al crear torneo en la nube: " + (res.error || "Missing UUIDs"));
+                setIsSavingSetup(false);
+                return;
+            }
 
-        console.log("Setup initialized via Store & Cloud:", tId);
-        router.push("/");
+            // 3. Quantum Store Initialization (Local, with GUARANTEED pairUuidMap)
+            useTournamentStore.getState().initializeTournament(tId, finalHost, pairs, [], res.pairIds);
+
+            // 4. V4 MULTIPLAYER SYNC: Publish Global Signal
+            // This wakes up all other clients
+            const activeRes = await setActiveTournament(tId);
+            if (!activeRes.success) {
+                alert("⚠️ Error al publicar Jornada. Revisa conexión.");
+            }
+
+            // 5. Fallback Cleanup (Just in case)
+            localStorage.removeItem("activeMatch");
+            sessionStorage.removeItem("activeMatch");
+            localStorage.removeItem("match_history");
+
+            console.log("✅ Setup initialized via Store & Cloud (Synchronously):", tId);
+            router.push("/");
+        } catch (error) {
+            console.error("Critical Setup Error:", error);
+            setIsSavingSetup(false);
+        }
     };
 
     return (
