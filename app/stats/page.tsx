@@ -1,15 +1,69 @@
 "use client";
 
-import { useSafeTournamentStore } from "@/lib/store";
+import { useSafeTournamentStore, useTournamentStore } from "@/lib/store";
 import { calculateStats, PlayerStats } from "@/lib/statsService";
-import { ArrowLeft, Trophy, Flame, Skull, Crown, AlertOctagon } from "lucide-react";
+import { ArrowLeft, Trophy, Flame, Skull, Crown, AlertOctagon, Share2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { generateFinalReportString, ReportPayload } from "@/lib/reportService";
+import { OFFICIAL_PLAYERS } from "@/lib/constants";
 
 export default function StatsPage() {
     const router = useRouter();
     const { safeMatchHistory, safePairs, isReady } = useSafeTournamentStore();
+    const hostName = useTournamentStore(state => state.hostName) || "Anfitrión";
     const [stats, setStats] = useState<ReturnType<typeof calculateStats> | null>(null);
+
+    const handleShareWhatsApp = () => {
+        if (!stats) return;
+
+        // 1. Extraer puntos históricos puros (baseline pre-torneo)
+        const prevStats = calculateStats([], safePairs);
+        const prevPointsMap: Record<string, number> = {};
+        prevStats.leaderboard.forEach(p => {
+            prevPointsMap[p.name] = p.totalPoints;
+        });
+
+        // 2. Mapear deltas de la jornada actual vs histórico global 
+        const payloadPlayers = OFFICIAL_PLAYERS.map(nombre => {
+            const previos = prevPointsMap[nombre] || 0;
+            const final = stats.leaderboard.find(p => p.name === nombre)?.totalPoints || 0;
+            const actuales = final - previos;
+
+            return {
+                nombre,
+                puntosPrevios: previos,
+                puntosActuales: actuales
+            };
+        });
+
+        // 3. Determinar pareja ganadora (Top 2 en Deltas Actuales)
+        const playersByActuales = [...payloadPlayers].sort((a, b) => b.puntosActuales - a.puntosActuales);
+        const ganadores = `${playersByActuales[0]?.nombre || ""} y ${playersByActuales[1]?.nombre || ""}`;
+
+        // 4. Fechas en Español Exactas
+        const date = new Date();
+        const dias = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+        const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+        const diaSemana = dias[date.getDay()];
+        const fechaStr = `${date.getDate()} de ${meses[date.getMonth()]}`;
+
+        // 5. Instanciar Payload Estricta
+        const payload: ReportPayload = {
+            diaSemana,
+            fechaStr,
+            anfitrion: hostName,
+            ganadores,
+            jugadores: payloadPlayers
+        };
+
+        // 6. Inyectar Función Pura sin side-effects
+        const reportString = generateFinalReportString(payload);
+
+        // 7. Lanzar URL Scheme Nativo de WhatsApp
+        const encoded = encodeURIComponent(reportString);
+        window.location.href = `whatsapp://send?text=${encoded}`;
+    };
 
     useEffect(() => {
         if (isReady && safeMatchHistory) {
@@ -38,9 +92,19 @@ export default function StatsPage() {
         <div className="min-h-screen bg-[#4A3B32] text-[#FDFBF7] font-hand p-4 pb-20">
             {/* Header */}
             <div className="flex flex-col items-center text-center gap-6 mb-12">
-                <a href="/" className="text-[#A5D6A7] flex items-center gap-2 hover:opacity-80 transition self-start text-3xl font-bold">
-                    <ArrowLeft size={32} /> Volver
-                </a>
+                <div className="flex justify-between w-full max-w-7xl mx-auto px-4 mt-6">
+                    <a href="/" className="text-[#A5D6A7] flex items-center gap-2 hover:opacity-80 transition text-3xl font-bold">
+                        <ArrowLeft size={32} /> Volver
+                    </a>
+
+                    <button
+                        onClick={handleShareWhatsApp}
+                        className="bg-[#25D366] hover:bg-[#1DA851] text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-3 transition-colors shadow-lg active:scale-95 border border-white/20"
+                    >
+                        <Share2 size={24} />
+                        Compartir en WhatsApp
+                    </button>
+                </div>
 
                 <div>
                     <h1 className="text-6xl font-bold mb-4 text-white flex items-center gap-4 justify-center">
