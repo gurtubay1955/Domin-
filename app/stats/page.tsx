@@ -60,9 +60,26 @@ export default function StatsPage() {
         // 6. Inyectar Función Pura sin side-effects
         const reportString = generateFinalReportString(payload);
 
-        // 7. Lanzar URL Scheme Nativo de WhatsApp
-        const encoded = encodeURIComponent(reportString);
-        window.location.href = `whatsapp://send?text=${encoded}`;
+        // 7. Enviar POST al backend sin usar APIs externas
+        fetch('/api/whatsapp/compartir', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ resultado: reportString })
+        })
+            .then(async (response) => {
+                if (response.ok) {
+                    alert("✅ Reporte enviado al backend exitosamente.");
+                } else {
+                    const errText = await response.text();
+                    alert(`⚠️ Error devuelto por el servidor: ${response.status} - ${errText}`);
+                }
+            })
+            .catch(error => {
+                console.error("Error al disparar el fetch:", error);
+                alert("❌ Fallo de conexión o red al intentar compartir.");
+            });
     };
 
     useEffect(() => {
