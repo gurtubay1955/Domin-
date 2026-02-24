@@ -308,10 +308,9 @@ export default function Home() {
         </div>
 
 
-        {/* Footer Info */}
         <div className="flex flex-col items-center gap-6 opacity-40 text-xl text-center font-bold tracking-widest mt-8">
           <Users size={18} />
-          <span>SISTEMA V6.3.0 (WHATSAPP BUSTER)</span>
+          <span>SISTEMA V7.0.0 (DOMINO ANALYTICS)</span>
         </div>
 
         <div className="flex gap-6 mt-4">
@@ -328,9 +327,9 @@ export default function Home() {
             </button>
           </PinGuard>
           <a
-            href="/stats"
+            href="/analytics"
             className="p-4 bg-white/5 hover:bg-white/10 text-[#FFD700]/50 hover:text-[#FFD700] rounded-full transition-all hover:scale-110 active:scale-95 group"
-            title="Estadísticas del Torneo"
+            title="Domino Analytics Avanzado"
           >
             <Trophy size={32} className="group-hover:animate-bounce transition-transform duration-700" />
           </a>
