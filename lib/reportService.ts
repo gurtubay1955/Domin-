@@ -41,7 +41,7 @@ export function generateFinalReportString(payload: ReportPayload): string {
     // "Ganaron:"
     // "[ganadores]"
     // Y un salto de línea luego del encabezado.
-    const header = `Dominó ${payload.diaSemana} ${payload.fechaStr} anfitrión: ${payload.anfitrion} \nGanaron:\n${payload.ganadores}\n\n`;
+    const header = `Dominó ${payload.diaSemana} ${payload.fechaStr} ${payload.anfitrion} \nGanaron:\n${payload.ganadores}\n\n`;
 
     // 4. Filas del cuerpo:
     // "X- Nombre: previos+actuales = total"
