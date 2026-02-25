@@ -25,7 +25,7 @@ export default function AnalyticsDashboard() {
                     .from('view_player_standings')
                     .select('*')
                     .order('total_championship_points', { ascending: false })
-                    .order('point_differential', { ascending: false });
+                    .order('point_diff', { ascending: false });
 
                 if (error) throw error;
 

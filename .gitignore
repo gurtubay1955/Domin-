@@ -1,41 +1,78 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
-
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
+# logs
+logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+lerna-debug.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# Diagnostic reports (https://nodejs.org/api/report.html)
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
-# vercel
+# pids
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# lib coverage
+lib-cov
+
+# coverage Directory used by tools like istanbul
+coverage
+*.lcov
+
+# nyc test coverage
+.nyc_output
+
+# grunt code coverage
+.grunt
+
+# bower dependency directory (https://bower.io/)
+bower_components
+
+# node-waf configuration
+.lock-wscript
+
+# compiled output
+build/
+Release/
+.next/
+out/
+dist/
+
+# Env
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Vercel
 .vercel
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# Other
+.DS_Store
+node_modules/
+
+# --- ANTIGRAVITY IGNORES (LARGE FILES) ---
+upgrade_tmp/
+Antigravity upgrade.tar.gz
+*.sql
+*.txt
+*.cjs
+*.mjs
+*.sh
+AI_Team/
+Versions/
+_Versions/
+COPILOT_HANDOVER.md
+DOCUMENTO_RECTOR*.md
+GOVERNANCE_LOCK.md
+test*.js
+setup_db_live.js
+backend_simulation.js
+diagnose_*.js
+sanity_check_db.js
+simulate_live_score.js

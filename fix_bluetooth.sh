@@ -1,4 +1,6 @@
 #!/bin/bash
+echo "Habilitando wakeup para el adaptador Bluetooth (Microsoft Sculpt)"
+echo enabled | sudo tee /sys/bus/usb/devices/4-1.8/power/wakeup > /dev/null
 echo "============================================"
 echo "   REPARANDO CONEXIÓN BLUETOOTH 🦷💙        "
 echo "============================================"
