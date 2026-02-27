@@ -529,3 +529,36 @@ export const fetchMatches = async (tournamentId: string) => {
         return { success: false, error: e.message };
     }
 };
+
+/**
+ * checkActiveMatchForPair (V6.4 Reconexión Mágica)
+ * Revisa si una pareja tiene actualmente un partido "vivo" en live_matches.
+ * Útil para recuperar sesión tras un refresco accidental (soft-lock).
+ */
+export const checkActiveMatchForPair = async (tournamentId: string, pairNum: number) => {
+    try {
+        const { data, error } = await supabase
+            .from('live_matches')
+            .select('*')
+            .eq('tournament_id', tournamentId)
+            .or(`pair_a_num.eq.${pairNum},pair_b_num.eq.${pairNum}`)
+            .single();
+
+        if (error && error.code !== 'PGRST116') { // PGRST116 is "Rows not found" (expected if no active match)
+            throw error;
+        }
+
+        if (data) {
+            return {
+                success: true,
+                hasActiveMatch: true,
+                matchData: data
+            };
+        }
+
+        return { success: true, hasActiveMatch: false };
+    } catch (e: any) {
+        console.error("❌ SYNC ERROR (checkActiveMatchForPair):", e);
+        return { success: false, error: e.message };
+    }
+};

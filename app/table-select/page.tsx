@@ -13,7 +13,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Users, AlertCircle, PlayCircle, History, Trophy } from "lucide-react";
+import { Users, AlertCircle, PlayCircle, History, Trophy, RotateCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTournamentStore } from "@/lib/store"; // Quantum Store
 import { supabase } from "@/lib/supabaseClient"; // Supabase Client for Live V3.1
@@ -40,6 +40,10 @@ export default function TableSelectPage() {
 
     // Opponent Selection
     const [opponentPairNum, setOpponentPairNum] = useState<number | "">("");
+
+    // V6.4: Magic Reconnect State
+    const [orphanMatch, setOrphanMatch] = useState<any>(null);
+    const [isCheckingOrphan, setIsCheckingOrphan] = useState(false);
 
     useEffect(() => {
         // 0. GUARD: Ensure tournament is configured
@@ -70,6 +74,32 @@ export default function TableSelectPage() {
         });
 
     }, [router, isSetupComplete, pairs]);
+
+    // V6.4: MAGIC RECONNECT CHECKER
+    useEffect(() => {
+        if (!tournamentId || !myPairNum || orphanMatch) return;
+
+        const checkOrphanMatch = async () => {
+            setIsCheckingOrphan(true);
+            try {
+                const { checkActiveMatchForPair } = await import('@/lib/tournamentService');
+                const result = await checkActiveMatchForPair(tournamentId, myPairNum);
+
+                if (result.success && result.hasActiveMatch) {
+                    // Solo consideramos partidas vivas aquellas que ya empezaron (hand_number > 0)
+                    // o incluso las que apenas se sentaron (hand_number = 0)
+                    console.warn("⚠️ MAGIC RECONNECT: Orphan match detected!", result.matchData);
+                    setOrphanMatch(result.matchData);
+                }
+            } catch (err) {
+                console.error("Error checking orphan match", err);
+            } finally {
+                setIsCheckingOrphan(false);
+            }
+        };
+
+        checkOrphanMatch();
+    }, [tournamentId, myPairNum]);
 
     // DEBUG: Inspect Match History
     useEffect(() => {
@@ -151,6 +181,34 @@ export default function TableSelectPage() {
         router.push("/game");
     };
 
+    /**
+     * handleResumeMatch (V6.4)
+     * Resucita la sesión perdida usando los datos de la nube
+     */
+    const handleResumeMatch = () => {
+        if (!orphanMatch) return;
+        console.log("🔄 Resuming orphaned match...", orphanMatch);
+
+        const isPairA = orphanMatch.pair_a_num === myPairNum;
+        const opponentPairNum = isPairA ? orphanMatch.pair_b_num : orphanMatch.pair_a_num;
+
+        // Rebuild Session Config Object
+        const matchConfig = {
+            scorer: currentUser,
+            myPair: myPairNum,
+            opponentPair: opponentPairNum,
+            myPartner: myPartner,
+            oppNames: pairs[opponentPairNum.toString()] || ["Desconocido 1", "Desconocido 2"]
+        };
+
+        const configStr = JSON.stringify(matchConfig);
+        localStorage.setItem("activeMatch", configStr);
+        sessionStorage.setItem("activeMatch", configStr);
+
+        console.log("🚀 Navigating to /game for resume...");
+        router.push("/game");
+    };
+
     // Filter history for current user - Fix for "Partidas Jugadas (X)" count
     const filteredHistory = useMemo(() => {
         return matchHistory.filter(m =>
@@ -214,6 +272,35 @@ export default function TableSelectPage() {
                     </div>
                 </div>
             </div>
+
+            {/* V6.4: MAGIC RECONNECT BANNER */}
+            <AnimatePresence>
+                {orphanMatch && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -20, height: 0 }}
+                        animate={{ opacity: 1, y: 0, height: 'auto' }}
+                        className="max-w-lg mx-auto mb-8"
+                    >
+                        <div className="bg-red-500/20 border-2 border-red-500/50 p-6 rounded-3xl backdrop-blur-md shadow-[0_0_30px_rgba(239,83,80,0.3)]">
+                            <div className="flex items-center gap-4 mb-4">
+                                <AlertCircle className="text-red-400 animate-pulse" size={32} />
+                                <div>
+                                    <h3 className="text-2xl font-black text-white">¡Partida en Progreso!</h3>
+                                    <p className="opacity-90 leading-tight">Tienes un partido abierto en la Mesa.</p>
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={handleResumeMatch}
+                                className="w-full mt-2 bg-gradient-to-r from-red-500 to-orange-500 text-white font-black text-2xl py-4 rounded-xl shadow-lg hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 border border-white/20"
+                            >
+                                <RotateCw size={24} />
+                                Reanudar Anotación
+                            </button>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Main Action Area */}
             <div className="space-y-6 max-w-lg mx-auto">

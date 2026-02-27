@@ -103,7 +103,7 @@ export default function ScoreBoard({
                 setTeamB(match.oppNames || initialTeamB);
                 setConfig({ pairA: match.myPair, pairB: match.opponentPair });
 
-                // 2. Restore Hands (Only if config matches)
+                // 2. Restore Hands (Magic Reconnect V6.4 vs Local)
                 const savedHandsStr = sessionStorage.getItem("activeMatch_hands");
                 if (savedHandsStr) {
                     const savedData = JSON.parse(savedHandsStr);
@@ -112,14 +112,46 @@ export default function ScoreBoard({
                         console.log("♻️ Restoring saved hands:", savedData.hands);
                         if (savedData.hands && savedData.hands.length > 0) {
                             setHands(savedData.hands);
+                            setIsInitialized(true); // MARK AS READY TO SAVE
+                            return; // Terminamos, teníamos datos locales
                         }
                     }
                 }
+
+                // 3. MAGIC RECONNECT HIDRATION (No local data, try Cloud)
+                // If rodolfo cleared cache or used a different browser
+                const tId = useTournamentStore.getState().tournamentId;
+                if (tId) {
+                    import('@/lib/tournamentService').then(async ({ checkActiveMatchForPair }) => {
+                        const res = await checkActiveMatchForPair(tId, match.myPair);
+                        if (res.success && res.hasActiveMatch && res.matchData) {
+                            console.log("🪄 MAGIC RECONNECT: Hydrating from Cloud:", res.matchData);
+                            const isPairA = res.matchData.pair_a_num === match.myPair;
+                            const remoteScoreMy = isPairA ? res.matchData.score_a : res.matchData.score_b;
+                            const remoteScoreOpp = isPairA ? res.matchData.score_b : res.matchData.score_a;
+
+                            // Si la nube tiene más de 0 puntos, reconstruimos Hand 1 como "Acumulado"
+                            if (remoteScoreMy > 0 || remoteScoreOpp > 0) {
+                                setHands([{
+                                    handNumber: 1,
+                                    pointsA: remoteScoreMy,
+                                    pointsB: remoteScoreOpp
+                                }]);
+                            }
+                        }
+                        setIsInitialized(true);
+                    });
+                } else {
+                    setIsInitialized(true);
+                }
+
             } catch (e) {
                 console.error("Failed to restore match/hands", e);
+                setIsInitialized(true);
             }
+        } else {
+            setIsInitialized(true);
         }
-        setIsInitialized(true); // MARK AS READY TO SAVE
     }, []); // Run ONCE on mount, independent of props
 
     // EFFECT: AUTO-SAVE HANDS & LIVE BROADCAST
