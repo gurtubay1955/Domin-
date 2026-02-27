@@ -541,7 +541,7 @@ export const checkActiveMatchForPair = async (tournamentId: string, pairNum: num
             .from('live_matches')
             .select('*')
             .eq('tournament_id', tournamentId)
-            .or(`pair_a_num.eq.${pairNum},pair_b_num.eq.${pairNum}`)
+            .or(`pair_a.eq.${pairNum},pair_b.eq.${pairNum}`)
             .single();
 
         if (error && error.code !== 'PGRST116') { // PGRST116 is "Rows not found" (expected if no active match)

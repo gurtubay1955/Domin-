@@ -126,7 +126,7 @@ export default function ScoreBoard({
                         const res = await checkActiveMatchForPair(tId, match.myPair);
                         if (res.success && res.hasActiveMatch && res.matchData) {
                             console.log("🪄 MAGIC RECONNECT: Hydrating from Cloud:", res.matchData);
-                            const isPairA = res.matchData.pair_a_num === match.myPair;
+                            const isPairA = res.matchData.pair_a === match.myPair;
                             const remoteScoreMy = isPairA ? res.matchData.score_a : res.matchData.score_b;
                             const remoteScoreOpp = isPairA ? res.matchData.score_b : res.matchData.score_a;
 

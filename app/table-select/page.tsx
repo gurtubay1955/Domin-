@@ -189,8 +189,8 @@ export default function TableSelectPage() {
         if (!orphanMatch) return;
         console.log("🔄 Resuming orphaned match...", orphanMatch);
 
-        const isPairA = orphanMatch.pair_a_num === myPairNum;
-        const opponentPairNum = isPairA ? orphanMatch.pair_b_num : orphanMatch.pair_a_num;
+        const isPairA = orphanMatch.pair_a === myPairNum;
+        const opponentPairNum = isPairA ? orphanMatch.pair_b : orphanMatch.pair_a;
 
         // Rebuild Session Config Object
         const matchConfig = {
