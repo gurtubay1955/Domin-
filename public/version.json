@@ -1,6 +1,6 @@
 {
-  "version": "7.1.1",
-  "buildTime": "2026-02-27T07:31:57Z",
+  "version": "8.0.0",
+  "buildTime": "2026-02-27T02:29:46Z",
   "features": [
     "Real-time host sync",
     "Real-time opponent selection sync",

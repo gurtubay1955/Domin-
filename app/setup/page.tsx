@@ -17,7 +17,7 @@
 
 import { useState, Suspense, useEffect } from "react";
 import { OFFICIAL_PLAYERS } from "@/lib/constants";
-import { Users, PlayCircle, AlertCircle, ArrowLeft, Save, Lock, RefreshCw } from "lucide-react";
+import { Users, PlayCircle, AlertCircle, ArrowLeft, Save, Lock, RefreshCw, Dices, CheckCircle2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTournamentStore } from "@/lib/store"; // Quantum Store
 import PinGuard from "@/components/PinGuard"; // Guard
@@ -29,11 +29,13 @@ function SetupContent() {
     const searchParams = useSearchParams();
     const currentHost = searchParams.get('host') || ""; // User requested empty if not set
 
-    // STATE: Mapping of Player Name -> Pair Number (or empty string if unassigned)
-    // Initialized with all OFFICIAL_PLAYERS set to ""
-    const [assignments, setAssignments] = useState<Record<string, number | "">>(
-        Object.fromEntries(OFFICIAL_PLAYERS.map(p => [p, ""]))
-    );
+    // STATE: Selección de Asistencia (V7.2)
+    // Guardamos un Set con los nombres de los jugadores que asistieron a la jornada
+    const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
+
+    // STATE: Parejas generadas por el Motor Aleatorio
+    const [finalPairs, setFinalPairs] = useState<Record<string, string[]>>({});
+    const [isSorteoComplete, setIsSorteoComplete] = useState(false);
 
     // 🛡️ HIGHLANDER PROTOCOL SCHEMA
     const [blockingTournament, setBlockingTournament] = useState<{ id: string, host: string } | null>(null);
@@ -73,41 +75,128 @@ function SetupContent() {
 
 
     /**
-     * handleAssign
-     * Updates the assignment state when a dropdown is changed.
+     * handleTogglePlayer (V7.2)
+     * Marca o desmarca a un jugador como asistente.
      */
-    const handleAssign = (player: string, value: string) => {
-        setAssignments(prev => ({
-            ...prev,
-            [player]: value ? parseInt(value) : ""
-        }));
+    const handleTogglePlayer = (player: string) => {
+        setIsSorteoComplete(false); // Resetear sorteo si se cambia la asistencia
+        setFinalPairs({});
+
+        setSelectedPlayers(prev => {
+            const next = new Set(prev);
+            if (next.has(player)) {
+                next.delete(player);
+            } else {
+                next.add(player);
+            }
+            return next;
+        });
     };
 
     /**
-     * VALIDATION LOGIC
-     * transforms the flat assignments map into a structured Pairs object.
-     * Record<PairNumber, Array<PlayerNames>>
+     * Fisher-Yates array shuffle puro
      */
-    const getPairs = () => {
-        const pairs: Record<number, string[]> = {};
-        Object.entries(assignments).forEach(([player, pairNum]) => {
-            if (pairNum !== "") {
-                if (!pairs[pairNum]) pairs[pairNum] = [];
-                pairs[pairNum].push(player);
-            }
-        });
-        return pairs;
+    const shuffleArray = (array: string[]) => {
+        const result = [...array];
+        for (let i = result.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [result[i], result[j]] = [result[j], result[i]];
+        }
+        return result;
     };
 
-    const pairs = getPairs();
-    const activePairs = Object.entries(pairs);
-    const totalPlayers = Object.values(assignments).filter(Boolean).length;
+    /**
+     * Motor de Reglas Estocásticas (V7.2)
+     */
+    const handleSorteoAleatorio = () => {
+        if (!isValidForSorteo) return;
+        setIsSorteoComplete(false);
 
-    // RULE CHECKS:
-    // 1. Pairs must have exactly 2 players.
-    const invalidPairs = activePairs.filter(([_, players]) => players.length !== 2);
-    // 2. Must have at least 1 valid pair (technically 2 for a match) and even number of players.
-    const isValid = activePairs.length > 0 && invalidPairs.length === 0 && totalPlayers % 2 === 0;
+        const players = Array.from(selectedPlayers);
+        let finalPairsMap: Record<string, string[]> = {};
+        let resultValid = false;
+        let intentos = 0;
+
+        // Bucle de Motor Estocástico con Fallback (Brute-Force Reroll)
+        while (!resultValid && intentos < 1000) {
+            intentos++;
+            finalPairsMap = {};
+            let pairCounter = 1;
+
+            let pool = [...players];
+
+            // ==========================================
+            // REGLA 1 (Dúo Dinámico): "Alex" y "Rodrigo Jr"
+            // Si ambos vinieron, son pareja obligatoria.
+            // ==========================================
+            const hasAlex = pool.includes("Alex");
+            const hasRodriJr = pool.includes("Rodrigo Jr");
+            const hasRodri = pool.includes("Rodrigo");
+
+            if (hasAlex && hasRodriJr) {
+                // Inyectamos a fuerza en la Mesa 1
+                finalPairsMap[pairCounter.toString()] = ["Alex", "Rodrigo Jr"];
+                pairCounter++;
+                // Los sacamos de la tómbola
+                pool = pool.filter(p => p !== "Alex" && p !== "Rodrigo Jr");
+            }
+
+            // ==========================================
+            // SORTEO GENERAL
+            // ==========================================
+            pool = shuffleArray(pool);
+
+            // Armamos el resto de las parejas y las guardamos temporalmente
+            const tempPairsList: string[][] = [];
+            for (let i = 0; i < pool.length; i += 2) {
+                tempPairsList.push([pool[i], pool[i + 1]]);
+            }
+
+            // ==========================================
+            // REGLA 2 (Filtro Profesional): "Alex" vs "Rodrigo"
+            // Solo aplica si Rodrigo Jr no asistió.
+            // Si cayeron juntos en una pareja temporal, abortamos.
+            // ==========================================
+            let regla2Rota = false;
+
+            if (!hasRodriJr && hasAlex && hasRodri) {
+                // Buscamos si en alguna de las parejitas temporales están ambos amontonados
+                for (const pair of tempPairsList) {
+                    if (pair.includes("Alex") && pair.includes("Rodrigo")) {
+                        regla2Rota = true;
+                        break;
+                    }
+                }
+            }
+
+            // Validación de Intento
+            if (regla2Rota) {
+                // El Sorteo es Nulo, tiramos los boletos y repetimos el While (intentos++)
+                continue;
+            } else {
+                // Sorteo Exitoso, asignamos los tickets
+                tempPairsList.forEach(pair => {
+                    finalPairsMap[pairCounter.toString()] = pair;
+                    pairCounter++;
+                });
+                resultValid = true; // Rompe el While
+            }
+        }
+
+        if (!resultValid) {
+            alert("⚠️ Error del Motor: No se pudo generar una combinación que cumpla todas las reglas después de 1000 intentos.");
+            return;
+        }
+
+        console.log(`✅ Sorteo exitoso tras ${intentos} iteraciones invisibles.`);
+        setFinalPairs(finalPairsMap);
+        setIsSorteoComplete(true);
+    };
+
+    // VALIDATION LOGIC (V7.2)
+    const activePlayersCount = selectedPlayers.size;
+    const isValidForSorteo = activePlayersCount >= 4 && activePlayersCount % 2 === 0;
+    const isValidForSave = isSorteoComplete && Object.keys(finalPairs).length > 0;
 
     const [isSavingSetup, setIsSavingSetup] = useState(false);
 
@@ -118,7 +207,7 @@ function SetupContent() {
      * NOW USES: Zustand Store (Transfiguration of State)
      */
     const handleFinishSetup = async () => {
-        if (!isValid || isSavingSetup) return;
+        if (!isValidForSave || isSavingSetup) return;
         setIsSavingSetup(true);
 
         // 1. Generate unique tournament ID (UUID for Supabase)
@@ -128,7 +217,8 @@ function SetupContent() {
         try {
             // 2. 🟢 V6.2: STRICT SYNCHRONOUS WAIT FOR DATABASE (Race Condition Fix)
             const { createTournament, setActiveTournament } = await import('@/lib/tournamentService');
-            const res = await createTournament(tId, finalHost, pairs);
+            // Usamos las parejas finales sorteadas 'finalPairs'
+            const res = await createTournament(tId, finalHost, finalPairs);
 
             if (!res.success || !res.pairIds) {
                 alert("⚠️ Error al crear torneo en la nube: " + (res.error || "Missing UUIDs"));
@@ -137,7 +227,7 @@ function SetupContent() {
             }
 
             // 3. Quantum Store Initialization (Local, with GUARANTEED pairUuidMap)
-            useTournamentStore.getState().initializeTournament(tId, finalHost, pairs, [], res.pairIds);
+            useTournamentStore.getState().initializeTournament(tId, finalHost, finalPairs, [], res.pairIds);
 
             // 4. V4 MULTIPLAYER SYNC: Publish Global Signal
             // This wakes up all other clients
@@ -218,72 +308,99 @@ function SetupContent() {
                 ) : (
                     <div className="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
 
-                        {/* Left Column: Roster */}
+                        {/* Left Column: Asistencia (V7.2) */}
                         <div className="bg-black/20 p-8 rounded-3xl backdrop-blur-sm border border-white/5">
-                            <div className="flex justify-center items-center gap-3 mb-6">
-                                <Users className="text-[#A5D6A7]" size={28} />
-                                <h2 className="text-2xl font-bold">Jugadores</h2>
+                            <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
+                                <div className="flex items-center gap-3">
+                                    <Users className="text-[#A5D6A7]" size={28} />
+                                    <h2 className="text-3xl font-bold">Asistencia</h2>
+                                </div>
+                                <div className="bg-[#A5D6A7]/20 border border-[#A5D6A7]/40 px-4 py-2 rounded-xl">
+                                    <span className="text-xl font-bold text-[#A5D6A7]">{activePlayersCount} Jugadores</span>
+                                </div>
                             </div>
-                            <div className="space-y-3">
+
+                            <p className="text-white/50 text-xl font-bold uppercase tracking-widest mb-4">Marca a los presentes</p>
+
+                            <div className="grid grid-cols-2 gap-3">
                                 {OFFICIAL_PLAYERS.map((player) => {
-                                    const assignedNum = assignments[player];
+                                    const isAssisting = selectedPlayers.has(player);
                                     return (
-                                        <div key={player} className={`flex items-center justify-between p-4 rounded-xl transition-colors ${assignedNum ? 'bg-white/10' : 'hover:bg-white/5'}`}>
-                                            <span className={`text-2xl ${assignedNum ? 'font-bold text-white' : 'opacity-60'}`}>
+                                        <button
+                                            key={player}
+                                            onClick={() => handleTogglePlayer(player)}
+                                            className={`flex items-center justify-between p-4 rounded-xl transition-all border-2 text-left
+                                                ${isAssisting
+                                                    ? 'bg-[#A5D6A7]/20 border-[#A5D6A7] text-white scale-[1.02] shadow-[0_0_15px_rgba(165,214,167,0.2)]'
+                                                    : 'bg-white/5 border-white/5 text-white/40 hover:bg-white/10'}
+                                            `}
+                                        >
+                                            <span className={`text-2xl pt-1 truncate ${isAssisting ? 'font-black' : 'font-medium'}`}>
                                                 {player}
                                             </span>
 
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-xl font-bold opacity-80 uppercase tracking-widest mr-2 text-white/60">
-                                                    {assignedNum ? "Pareja" : "Falta"}
-                                                </span>
-                                                <select
-                                                    value={assignedNum}
-                                                    onChange={(e) => handleAssign(player, e.target.value)}
-                                                    className="bg-[#FDFBF7] text-[#4A3B32] font-bold text-2xl text-center w-20 h-12 rounded-xl focus:outline-none focus:ring-4 focus:ring-[#81C784]"
-                                                >
-                                                    <option value="">-</option>
-                                                    {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
-                                                        <option key={num} value={num}>{num}</option>
-                                                    ))}
-                                                </select>
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors
+                                                ${isAssisting ? 'bg-[#A5D6A7] text-[#1B5E20]' : 'bg-black/20 text-white/10'}`}>
+                                                {isAssisting && <CheckCircle2 size={20} strokeWidth={3} />}
                                             </div>
-                                        </div>
+                                        </button>
                                     );
                                 })}
                             </div>
+
+                            {/* Alerta de Imparidad */}
+                            {!isValidForSorteo && activePlayersCount > 0 && (
+                                <div className="mt-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 flex items-center justify-center gap-3 text-red-300">
+                                    <AlertCircle size={24} />
+                                    <span className="text-xl font-bold">El número de asistentes debe ser par.</span>
+                                </div>
+                            )}
+
+                            {/* Botón de Sorteo (Habilitado solo si es par) */}
+                            <button
+                                onClick={handleSorteoAleatorio}
+                                disabled={!isValidForSorteo}
+                                className={`w-full mt-6 py-6 rounded-2xl font-black text-3xl shadow-xl flex items-center justify-center gap-3 transition-transform
+                                    ${isValidForSorteo
+                                        ? 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white hover:scale-[1.02] border border-blue-400/50'
+                                        : 'bg-white/5 text-white/20 cursor-not-allowed'}
+                                `}
+                            >
+                                <Dices size={32} />
+                                {isSorteoComplete ? 'Volver a Sortear Parejas' : 'Sortear Parejas Estocásticamente'}
+                            </button>
                         </div>
 
-                        {/* Column 2: Status & Validation */}
+                        {/* Column 2: Status & Validation (V7.2 Sorteo Display) */}
                         <div className="space-y-6">
-                            <div className="bg-black/20 p-6 rounded-2xl backdrop-blur-sm border border-white/5 min-h-[200px]">
-                                <div className="flex justify-center items-center gap-2 mb-6">
-                                    <Users className="text-[#A5D6A7]" size={28} />
-                                    <Users className="text-[#A5D6A7]" size={28} />
-                                    <h2 className="text-2xl font-bold ml-2">Parejas</h2>
+                            <div className="bg-black/20 p-6 rounded-2xl backdrop-blur-sm border border-white/5 min-h-[500px] flex flex-col">
+                                <div className="flex items-center gap-3 mb-6 border-b border-white/10 pb-4">
+                                    <div className="bg-yellow-500/20 p-2 rounded-xl text-yellow-400">
+                                        <Dices size={24} />
+                                    </div>
+                                    <h2 className="text-3xl font-bold">Resultado del Sorteo</h2>
                                 </div>
 
-                                {activePairs.length === 0 ? (
-                                    <p className="opacity-40 text-center py-10 italic text-xl">
-                                        Selecciona números para armar las parejas...
-                                    </p>
+                                {!isSorteoComplete ? (
+                                    <div className="flex-1 flex flex-col items-center justify-center opacity-40 text-center py-10">
+                                        <Dices size={64} className="mb-4 text-white/20" />
+                                        <p className="italic text-2xl font-medium">
+                                            Marca a los asistentes y presiona<br />"Sortear Parejas Estocásticamente"
+                                        </p>
+                                    </div>
                                 ) : (
-                                    <div className="space-y-2">
-                                        {activePairs.sort((a, b) => Number(a[0]) - Number(b[0])).map(([pairNum, players]) => (
-                                            <div key={pairNum} className={`flex justify-between items-center p-4 rounded-xl border-2 ${players.length === 2 ? 'border-[#81C784]/30 bg-[#81C784]/10' : 'border-[#E57373]/30 bg-[#E57373]/10'}`}>
+                                    <div className="space-y-3 flex-1">
+                                        {Object.entries(finalPairs).map(([pairNum, players]) => (
+                                            <div key={pairNum} className="flex justify-between items-center p-5 rounded-2xl border-2 border-yellow-500/30 bg-yellow-500/10 shadow-lg">
                                                 <div className="flex items-center gap-4">
-                                                    <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center font-black text-2xl">
+                                                    <div className="w-14 h-14 rounded-2xl bg-yellow-400 flex items-center justify-center font-black text-3xl text-yellow-950 shadow-inner">
                                                         {pairNum}
                                                     </div>
-                                                    <div className="flex flex-col">
-                                                        <span className="font-bold text-2xl text-white">
-                                                            {players.join(" & ")}
+                                                    <div className="flex flex-col text-left">
+                                                        <span className="text-sm font-bold opacity-60 uppercase tracking-widest text-yellow-200">Pareja #{pairNum}</span>
+                                                        <span className="font-black text-3xl text-white pt-1">
+                                                            {players.join(" y ")}
                                                         </span>
-                                                        {players.length !== 2 && (
-                                                            <span className="text-xl font-bold text-[#E57373]">
-                                                                {players.length < 2 ? "Falta jugador" : "Demasiados jugadores"}
-                                                            </span>
-                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -292,34 +409,22 @@ function SetupContent() {
                                 )}
                             </div>
 
-                            <div className="bg-black/20 p-6 rounded-2xl backdrop-blur-sm border border-white/5">
-                                <div className="flex justify-between text-2xl font-bold text-white mb-3 px-2">
-                                    <span>Jugadores: {totalPlayers}</span>
-                                    <span>Parejas: {activePairs.length}</span>
-                                </div>
-
-                                {invalidPairs.length > 0 && (
-                                    <div className="text-[#EF9A9A] bg-[#B71C1C]/20 p-3 rounded-lg text-xl mb-4 flex items-center gap-2 font-bold">
-                                        <AlertCircle size={24} />
-                                        Todos deben tener pareja.
-                                    </div>
-                                )}
-
+                            <div className="bg-black/20 p-6 rounded-3xl backdrop-blur-sm border border-white/5">
                                 <PinGuard
                                     onVerify={handleFinishSetup}
                                     title="Guardar Jornada"
-                                    description="¿Confirmar configuración? Esto sobreescribirá la jornada anterior."
+                                    description="¿Confirmar el sorteo e iniciar el Torneo?"
                                 >
                                     <button
-                                        disabled={!isValid}
-                                        className={`w-full py-5 text-2xl font-black rounded-2xl shadow-xl flex items-center justify-center gap-3 transition-all
-                    ${isValid
-                                                ? "bg-[#A5D6A7] text-[#1B5E20] hover:bg-[#81C784] hover:scale-105"
-                                                : "bg-white/5 text-white/20 cursor-not-allowed"}
-                  `}
+                                        disabled={!isValidForSave}
+                                        className={`w-full py-6 text-3xl font-black rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.3)] flex items-center justify-center gap-3 transition-transform duration-300
+                                            ${isValidForSave
+                                                ? "bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:scale-[1.02] border border-green-400/50"
+                                                : "bg-white/5 text-white/10 cursor-not-allowed"}
+                                        `}
                                     >
                                         <Save size={32} />
-                                        Guardar y Comenzar
+                                        Comenzar Torneo
                                     </button>
                                 </PinGuard>
                             </div>
