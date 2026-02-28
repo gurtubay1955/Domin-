@@ -8,10 +8,15 @@
  * Implements "Live Sync" logic where every major action is mirrored to the cloud.
  */
 
+// ============================================================
+// BLOQUE 1: IMPORTS Y CLIENTE SUPABASE
+// ============================================================
 import { supabase } from "./supabaseClient";
 import { MatchRecord } from "./store";
 
-// --- Types ---
+// ============================================================
+// BLOQUE 2: TIPOS E INTERFACES (DTOs)
+// ============================================================
 export interface PairDTO {
     pair_number: number;
     player1: string;
@@ -24,11 +29,16 @@ export interface TournamentDTO {
     pairs: Record<string, string[]>;
 }
 
-/**
- * createTournament
- * Initializes a new tournament in Supabase.
- * Should be called when the user finishes the 'Setup' phase.
- */
+// ============================================================
+// BLOQUE 3: GESTIÓN DE TORNEO (CRUD Principal)
+// ============================================================
+
+// FUNCIÓN: createTournament
+// PROPÓSITO: Initializes a new tournament in Supabase and atomic creation of pairs.
+// RECIBE: tournamentId: string, hostName: string, pairs: Record<string, string[]>
+// RETORNA: Promise<{ success: boolean, pairIds?: Record<string, number>, error?: string }>
+// DEPENDE DE: supabase ('tournaments' and 'pairs' tables)
+// LLAMADA POR: store.ts -> initializeTournament (when Setup finishes)
 export const createTournament = async (tournamentId: string, hostName: string, pairs: Record<string, string[]>) => {
     console.log("☁️ SERVICE: Creating tournament in cloud...", tournamentId);
 
@@ -81,20 +91,53 @@ export const createTournament = async (tournamentId: string, hostName: string, p
     }
 };
 
-/**
- * recordMatch
- * Saves a completed match to Supabase.
- * Should be called immediately after 'addMatch' in the store.
- */
+// FUNCIÓN: archiveTournament
+// PROPÓSITO: Updates a tournament status to 'finished'.
+// RECIBE: payload: any (with tournamentId)
+// RETORNA: Promise<{ success: boolean, error?: string }>
+// DEPENDE DE: supabase ('tournaments' table)
+// LLAMADA POR: store.ts -> (Legacy/Backup) end tournament workflow
+export const archiveTournament = async (payload: any) => {
+    // Just update status
+    const { error } = await supabase
+        .from('tournaments')
+        .update({ status: 'finished' })
+        .eq('id', payload.tournamentId);
+
+    return { success: !error, error: error?.message };
+};
+
+// FUNCIÓN: getCompletedTournamentsCount
+// PROPÓSITO: Returns the number of finished tournaments to calculate current Jornada.
+// RECIBE: void
+// RETORNA: Promise<number> (count of finished tournaments)
+// DEPENDE DE: supabase ('tournaments' table)
+// LLAMADA POR: store.ts -> during app initialization to set Jornada #
+export const getCompletedTournamentsCount = async () => {
+    // Count ONLY finished tournaments to calculate next round number
+    const { count, error } = await supabase
+        .from('tournaments')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'finished');
+
+    return count || 0;
+};
+
+// ============================================================
+// BLOQUE 4: REGISTRO DE PARTIDAS (Match Recording)
+// ============================================================
+
+// FUNCIÓN: recordMatch
+// PROPÓSITO: Completes and firmly saves a finished match, hands, and clears its live state.
+// RECIBE: match: MatchRecord
+// RETORNA: Promise<{ success: boolean, error?: string }>
+// DEPENDE DE: supabase ('pairs', 'matches', 'match_hands', 'live_matches' tables)
+// LLAMADA POR: store.ts -> addMatch
 export const recordMatch = async (match: MatchRecord) => {
     console.log("☁️ SERVICE: Recording match...", match.id);
 
     try {
-        // Need to find pair UUIDs first? 
-        // For V1, we might rely on pair_number if we don't have UUIDs in store yet.
-        // Actually, our schema references pairs(id). 
-        // OPTIMIZATION: For this phase, we will fetch pair IDs by tournament_id + pair_number.
-
+        // --- 4.1 Buscar UUIDs de parejas ---
         // 1. Fetch Pair IDs
         const { data: pairData, error: pairError } = await supabase
             .from('pairs')
@@ -126,6 +169,7 @@ export const recordMatch = async (match: MatchRecord) => {
             winnerId = oppPairId;
         }
 
+        // --- 4.2 Insertar partida ---
         // 2. Insert Match
         const { data: matchInserted, error: mError } = await supabase
             .from('matches')
@@ -149,6 +193,7 @@ export const recordMatch = async (match: MatchRecord) => {
 
         if (mError) throw new Error(mError.message);
 
+        // --- 4.3 Simular manos (temporal hasta que App mande handHistory) ---
         // 2.5 Insert Hands (Fake loop if real data not available, or real if Store updated in future)
         // Por ahora simulamos N registros de manos para que las gráficas no se rompan y cuenten "hands_a" y "hands_b"
         const handsCount = match.handsMy + match.handsOpp;
@@ -176,6 +221,7 @@ export const recordMatch = async (match: MatchRecord) => {
             await supabase.from('match_hands').insert(handsInserts);
         }
 
+        // --- 4.4 Limpiar live_matches (Anti-Zombie) ---
         // 🧹 V4.9 CLEANUP: DESTROY LIVE MATCH ROW (Anti-Zombie)
         // We must delete the row where these pairs were playing.
         // live_matches key is tournament_id + pair_a + pair_b
@@ -199,42 +245,16 @@ export const recordMatch = async (match: MatchRecord) => {
     }
 };
 
-/**
- * archiveTournament (Legacy/Backup)
- * Updates status to finished.
- */
-export const archiveTournament = async (payload: any) => {
-    // Just update status
-    const { error } = await supabase
-        .from('tournaments')
-        .update({ status: 'finished' })
-        .eq('id', payload.tournamentId);
+// ============================================================
+// BLOQUE 5: MARCADORES EN VIVO (Live Match CRUD)
+// ============================================================
 
-    return { success: !error, error: error?.message };
-};
-
-/**
- * getCompletedTournamentsCount
- * Returns the number of tournaments with status 'finished' + 'active' (history).
- * Used to calculate the current "Jornada #".
- */
-export const getCompletedTournamentsCount = async () => {
-    // Count ONLY finished tournaments to calculate next round number
-    const { count, error } = await supabase
-        .from('tournaments')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'finished');
-
-    return count || 0;
-};
-
-// --- REAL-TIME LIVE PROGRESS (V3.1) ---
-
-/**
- * updateLiveMatch
- * Updates the ephemeral score state in Supabase.
- * Call this every time a hand is finished.
- */
+// FUNCIÓN: updateLiveMatch
+// PROPÓSITO: Updates the ephemeral score state in live_matches.
+// RECIBE: tournamentId: string, myPair: number, oppPair: number, scoreMy: number, scoreOpp: number, handNum: number, scorekeeper?: string
+// RETORNA: Promise<void> (silent fail)
+// DEPENDE DE: supabase ('live_matches' table)
+// LLAMADA POR: UI (ScoreBoard / Keyboard) when a hand finishes
 export const updateLiveMatch = async (tournamentId: string, myPair: number, oppPair: number, scoreMy: number, scoreOpp: number, handNum: number, scorekeeper?: string) => {
     // 1. Normalize Keys (Pair A always smaller)
     const isASmaller = myPair < oppPair;
@@ -270,10 +290,12 @@ export const updateLiveMatch = async (tournamentId: string, myPair: number, oppP
     }
 };
 
-/**
- * deleteLiveMatch
- * Removes the live record when the match finishes (cleanup).
- */
+// FUNCIÓN: deleteLiveMatch
+// PROPÓSITO: Removes the live record explicitly (cleanup).
+// RECIBE: tournamentId: string, myPair: number, oppPair: number
+// RETORNA: Promise<void>
+// DEPENDE DE: supabase ('live_matches' table)
+// LLAMADA POR: store.ts -> removeLiveScore / UI cleanup
 export const deleteLiveMatch = async (tournamentId: string, myPair: number, oppPair: number) => {
     const pairA = Math.min(myPair, oppPair);
     const pairB = Math.max(myPair, oppPair);
@@ -288,14 +310,16 @@ export const deleteLiveMatch = async (tournamentId: string, myPair: number, oppP
     }
 };
 
+// ============================================================
+// BLOQUE 6: SINCRONIZACIÓN MULTIPLAYER (App State Global)
+// ============================================================
 
-// --- V4 MULTIPLAYER SYNC (Jornada Compartida) ---
-
-/**
- * updateHostName
- * Updates the host name for today's tournament.
- * Creates a placeholder tournament if none exists.
- */
+// FUNCIÓN: updateHostName
+// PROPÓSITO: Updates the host name for today's tournament or creates a placeholder.
+// RECIBE: hostName: string
+// RETORNA: Promise<{ success: boolean, tournamentId?: string, error?: string }>
+// DEPENDE DE: supabase ('tournaments' table)
+// LLAMADA POR: UI (Lobby / Login) at step 1
 export const updateHostName = async (hostName: string) => {
     console.log("🌍 SYNC: Updating host name:", hostName);
     const today = new Date().toISOString().split('T')[0];
@@ -344,11 +368,12 @@ export const updateHostName = async (hostName: string) => {
     }
 };
 
-/**
- * setActiveTournament
- * Publishes the given tournament ID as the GLOBALLY ACTIVE tournament.
- * Called by Host upon finishing setup.
- */
+// FUNCIÓN: setActiveTournament
+// PROPÓSITO: Publishes the given tournament ID as the GLOBALLY ACTIVE tournament.
+// RECIBE: tournamentId: string
+// RETORNA: Promise<{ success: boolean, error?: string }>
+// DEPENDE DE: supabase ('app_state' table global_config key)
+// LLAMADA POR: store.ts -> initializeTournament (Host role)
 export const setActiveTournament = async (tournamentId: string) => {
     console.log("🌍 SYNC: Setting active tournament:", tournamentId);
     try {
@@ -368,12 +393,12 @@ export const setActiveTournament = async (tournamentId: string) => {
     }
 };
 
-/**
- * deactivateTournament
- * Clears the active tournament from the global configuration.
- * Stops clients from re-hydrating an ended tournament.
- * V4.9: Also clears host_name from tournaments table
- */
+// FUNCIÓN: deactivateTournament
+// PROPÓSITO: Clears the active tournament from global configuration (kills the session).
+// RECIBE: void
+// RETORNA: Promise<{ success: boolean, error?: string }>
+// DEPENDE DE: supabase ('app_state' and 'tournaments' tables)
+// LLAMADA POR: store.ts -> clearTournament / Reset roles
 export const deactivateTournament = async () => {
     console.log("🌍 SYNC: Deactivating GLOBAL tournament...");
     try {
@@ -420,11 +445,39 @@ export const deactivateTournament = async () => {
     }
 };
 
-/**
- * fetchTournamentConfig
- * Recovers the full configuration (Host + Pairs) from Supabase
- * given a tournament ID. Used by Clients to "hydrate" their store.
- */
+// FUNCIÓN: getActiveTournamentId
+// PROPÓSITO: One-shot check for the current active ID.
+// RECIBE: void
+// RETORNA: Promise<{ success: boolean, activeId: string | null, error?: string }>
+// DEPENDE DE: supabase ('app_state' table global_config key)
+// LLAMADA POR: GlobalSync.tsx -> initial hydration
+export const getActiveTournamentId = async () => {
+    try {
+        const { data, error } = await supabase
+            .from('app_state')
+            .select('value')
+            .eq('key', 'global_config')
+            .single();
+
+        if (error) return { success: false, error: error.message };
+
+        return { success: true, activeId: data?.value?.active_tournament_id || null };
+    } catch (e: any) {
+        return { success: false, error: e.message }; // Fail safe
+    }
+};
+
+
+// ============================================================
+// BLOQUE 7: HIDRATACIÓN DE CLIENTES (Fetch / Read)
+// ============================================================
+
+// FUNCIÓN: fetchTournamentConfig
+// PROPÓSITO: Recovers full config (Host + Pairs) from Supabase to hydrate clients.
+// RECIBE: tournamentId: string
+// RETORNA: Promise<{ success: boolean, config?: Object, error?: string }>
+// DEPENDE DE: supabase ('tournaments', 'pairs' tables)
+// LLAMADA POR: Object/GlobalSync -> remote hydration of clients
 export const fetchTournamentConfig = async (tournamentId: string) => {
     try {
         // 1. Fetch Tournament Info (Host)
@@ -469,31 +522,12 @@ export const fetchTournamentConfig = async (tournamentId: string) => {
     }
 };
 
-/**
- * getActiveTournamentId
- * One-shot check for the current active ID.
- */
-export const getActiveTournamentId = async () => {
-    try {
-        const { data, error } = await supabase
-            .from('app_state')
-            .select('value')
-            .eq('key', 'global_config')
-            .single();
-
-        if (error) return { success: false, error: error.message };
-
-        return { success: true, activeId: data?.value?.active_tournament_id || null };
-    } catch (e: any) {
-        return { success: false, error: e.message }; // Fail safe
-    }
-};
-
-/**
- * fetchMatches
- * Retrieves all completed matches for a given tournament.
- * Uses Relational Join to get Pair Numbers from IDs.
- */
+// FUNCIÓN: fetchMatches
+// PROPÓSITO: Retrieves all completed matches for a given tournament using SQL Relations.
+// RECIBE: tournamentId: string
+// RETORNA: Promise<{ success: boolean, matches?: MatchRecord[], error?: string }>
+// DEPENDE DE: supabase ('matches', 'pairs' relational join)
+// LLAMADA POR: store.ts -> syncMatches / GlobalSync.tsx polling
 export const fetchMatches = async (tournamentId: string) => {
     try {
         // Query with JOIN to get pair_numbers
@@ -537,11 +571,12 @@ export const fetchMatches = async (tournamentId: string) => {
     }
 };
 
-/**
- * checkActiveMatchForPair (V6.4 Reconexión Mágica)
- * Revisa si una pareja tiene actualmente un partido "vivo" en live_matches.
- * Útil para recuperar sesión tras un refresco accidental (soft-lock).
- */
+// FUNCIÓN: checkActiveMatchForPair
+// PROPÓSITO: Revisa si una pareja tiene actualmente un partido "vivo" para (Reconexión Mágica).
+// RECIBE: tournamentId: string, pairNum: number
+// RETORNA: Promise<{ success: boolean, hasActiveMatch: boolean, matchData?: any, error?: string }>
+// DEPENDE DE: supabase ('live_matches' table)
+// LLAMADA POR: UI (Game start logic) to prevent duplication or trigger magic reconnect
 export const checkActiveMatchForPair = async (tournamentId: string, pairNum: number) => {
     try {
         const { data, error } = await supabase

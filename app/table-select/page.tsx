@@ -11,6 +11,9 @@
  * - Optimized for clarity.
  */
 
+// ============================================================
+// BLOQUE 1: IMPORTS Y DIRECTIVA DE CLIENTE
+// ============================================================
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Users, AlertCircle, PlayCircle, History, Trophy, RotateCw } from "lucide-react";
@@ -19,6 +22,9 @@ import { useTournamentStore } from "@/lib/store"; // Quantum Store
 import { supabase } from "@/lib/supabaseClient"; // Supabase Client for Live V3.1
 
 export default function TableSelectPage() {
+    // ============================================================
+    // BLOQUE 2: ESTADO LOCAL Y EXTRACCIÓN DEL STORE
+    // ============================================================
     const router = useRouter();
     const [currentUser, setCurrentUser] = useState("");
 
@@ -45,6 +51,47 @@ export default function TableSelectPage() {
     const [orphanMatch, setOrphanMatch] = useState<any>(null);
     const [isCheckingOrphan, setIsCheckingOrphan] = useState(false);
 
+    /**
+     * CALCULATE AVAILABLE OPPONENTS (The Core Algorithm)
+     * QUANTUM UPGRADE: Uses store data + useMemo.
+     */
+    const availableOpponents = useMemo(() => {
+        if (!myPairNum) return [];
+
+        return Object.entries(pairs).filter(([numStr, players]) => {
+            const pNum = parseInt(numStr);
+            if (pNum === myPairNum) return false; // Can't play against self
+
+            // Check if a match exists in history involving both pairs
+            const alreadyPlayed = matchHistory.some(m =>
+                (m.myPair === myPairNum && m.oppPair === pNum) ||
+                (m.myPair === pNum && m.oppPair === myPairNum) // Bidirectional check
+            );
+            return !alreadyPlayed;
+        });
+    }, [pairs, matchHistory, myPairNum]);
+
+    // Filter history for current user - Fix for "Partidas Jugadas (X)" count
+    const filteredHistory = useMemo(() => {
+        return matchHistory.filter(m =>
+            myPairNum && (m.myPair === myPairNum || m.oppPair === myPairNum)
+        );
+    }, [matchHistory, myPairNum]);
+
+    // Calculate Tournament Progress
+    const numPairs = Object.keys(pairs).length;
+    const totalExpectedTournament = numPairs > 0 ? (numPairs * (numPairs - 1)) / 2 : 0;
+    const totalExpectedPerPair = numPairs > 0 ? numPairs - 1 : 0;
+
+    // ============================================================
+    // BLOQUE 3: EFECTOS DE MONTAJE Y SUPERVIVENCIA
+    // ============================================================
+
+    // 3.1 useEffect de sesión y guards
+    // FUNCIÓN/EFECTO: Session Check & Pair Identification
+    // PROPÓSITO: Asegura que el torneo esté configurado y el usuario logueado. Carga los datos base de la pareja del usuario en sesión.
+    // DEPENDE DE: [router, isSetupComplete, pairs]
+    // LLAMADA POR: React Lifecycle 
     useEffect(() => {
         // 0. GUARD: Ensure tournament is configured
         if (!isSetupComplete || Object.keys(pairs).length === 0) {
@@ -75,7 +122,12 @@ export default function TableSelectPage() {
 
     }, [router, isSetupComplete, pairs]);
 
-    // V6.4: MAGIC RECONNECT CHECKER
+    // 3.2 useEffect de Magic Reconnect / Orphan Check
+    // FUNCIÓN/EFECTO: MAGIC RECONNECT CHECKER
+    // PROPÓSITO: Busca asíncronamente en Supabase si esta pareja abandonó una partida viva a medias y expone orphanMatch si ocurre. 
+    //            Usa import dinámico de tournamentService para evitar ejecución en Node.js Server Component.
+    // DEPENDE DE: [tournamentId, myPairNum]
+    // LLAMADA POR: React Lifecycle
     useEffect(() => {
         if (!tournamentId || !myPairNum || orphanMatch) return;
 
@@ -101,7 +153,11 @@ export default function TableSelectPage() {
         checkOrphanMatch();
     }, [tournamentId, myPairNum]);
 
-    // DEBUG: Inspect Match History
+    // 3.3 useEffect de debug de matchHistory
+    // FUNCIÓN/EFECTO: Inspect Match History
+    // PROPÓSITO: Volcado de diagnóstico en consola para monitorizar en vivo el recuento devuelto por el state global.
+    // DEPENDE DE: [matchHistory]
+    // LLAMADA POR: React Lifecycle 
     useEffect(() => {
         console.log("🔍 DEBUG: CURRENT MATCH HISTORY:", matchHistory);
         matchHistory.forEach(m => {
@@ -109,31 +165,25 @@ export default function TableSelectPage() {
         });
     }, [matchHistory]);
 
-    /**
-     * CALCULATE AVAILABLE OPPONENTS (The Core Algorithm)
-     * QUANTUM UPGRADE: Uses store data + useMemo.
-     */
-    const availableOpponents = useMemo(() => {
-        if (!myPairNum) return [];
 
-        return Object.entries(pairs).filter(([numStr, players]) => {
-            const pNum = parseInt(numStr);
-            if (pNum === myPairNum) return false; // Can't play against self
+    // ============================================================
+    // BLOQUE 4: HANDLERS Y UTILIDADES
+    // ============================================================
 
-            // Check if a match exists in history involving both pairs
-            const alreadyPlayed = matchHistory.some(m =>
-                (m.myPair === myPairNum && m.oppPair === pNum) ||
-                (m.myPair === pNum && m.oppPair === myPairNum) // Bidirectional check
-            );
-            return !alreadyPlayed;
-        });
-    }, [pairs, matchHistory, myPairNum]);
+    // 4.1 getGamesPlayed (helper puro)
+    // FUNCIÓN/EFECTO: getGamesPlayed
+    // PROPÓSITO: Extrae del estado cuántos partidos ya están finalizados (en histórial) por un 'pairId' específico.
+    // RECIBE: pairId: number
+    // LLAMADA POR: availableOpponents render (dentro de subcomponente en bucle) y filteredHistory JSX.
+    const getGamesPlayed = (pairId: number) => {
+        return matchHistory.filter(m => m.myPair === pairId || m.oppPair === pairId).length;
+    };
 
-    /**
-     * handleStartMatch
-     * Prepares the game session and redirects to the ScoreBoard.
-     * 🔴 V4.8: NOW updates live_matches IMMEDIATELY for real-time sync
-     */
+    // 4.2 handleStartMatch
+    // FUNCIÓN/EFECTO: handleStartMatch
+    // PROPÓSITO: Al crear una mesa, hace pre-check V8.3 para definir el scorekeeper; actualiza la tabla transnacional `live_matches` si el rol es dueño, guarda config de sesión y dirige a /game.
+    //            Usa import dinámico explícito para evitar ejecución bloqueada NextJS (Server/Client boundary).
+    // LLAMADA POR: Evento onClick del botón rojo "¡A LA MESA!"
     const handleStartMatch = async () => {
         console.log("🎯 handleStartMatch called", { myPairNum, opponentPairNum, tournamentId });
 
@@ -199,10 +249,10 @@ export default function TableSelectPage() {
         router.push("/game");
     };
 
-    /**
-     * handleResumeMatch (V6.4)
-     * Resucita la sesión perdida usando los datos de la nube
-     */
+    // 4.3 handleResumeMatch
+    // FUNCIÓN/EFECTO: handleResumeMatch (V6.4)
+    // PROPÓSITO: Accionable desde el banner de reconexión. Recupera el orphanMatch y setea el matchConfig temporal de almacenamiento con flag espectador si aplica antes de enrutar a /game.
+    // LLAMADA POR: Evento onClick del botón "Reanudar Anotación".
     const handleResumeMatch = () => {
         if (!orphanMatch) return;
         console.log("🔄 Resuming orphaned match...", orphanMatch);
@@ -237,30 +287,15 @@ export default function TableSelectPage() {
         router.push("/game");
     };
 
-    // Filter history for current user - Fix for "Partidas Jugadas (X)" count
-    const filteredHistory = useMemo(() => {
-        return matchHistory.filter(m =>
-            myPairNum && (m.myPair === myPairNum || m.oppPair === myPairNum)
-        );
-    }, [matchHistory, myPairNum]);
-
-    // Calculate Tournament Progress
-    const numPairs = Object.keys(pairs).length;
-    const totalExpectedTournament = numPairs > 0 ? (numPairs * (numPairs - 1)) / 2 : 0;
-    const totalExpectedPerPair = numPairs > 0 ? numPairs - 1 : 0;
-
-    /**
-     * Helper: Get games played for a specific pair
-     */
-    const getGamesPlayed = (pairId: number) => {
-        return matchHistory.filter(m => m.myPair === pairId || m.oppPair === pairId).length;
-    };
 
     if (!currentUser || !myPairNum) return null; // Wait for hydration
 
+    // ============================================================
+    // BLOQUE 6: RENDER Y JSX PRINCIPAL
+    // ============================================================
     return (
         <div className="min-h-screen bg-[#4A3B32] text-[#FDFBF7] font-hand p-4 pb-20">
-            {/* Header */}
+            {/* --- 6.1 Header: usuario, pareja y botón SYNC debug --- */}
             <div className="flex flex-col items-center justify-center text-center relative mb-10 pt-6">
                 <div className="z-10 bg-[#4A3B32]/80 backdrop-blur-sm p-4 rounded-3xl border border-white/5 shadow-2xl relative">
                     <h1 className="text-5xl font-black mb-2 tracking-tight text-[#FFD54F] drop-shadow-md">Mesa de Control</h1>
@@ -279,7 +314,7 @@ export default function TableSelectPage() {
                         <button
                             onClick={() => {
                                 const { syncMatches } = useTournamentStore.getState();
-                                // Manual Trigger
+                                // Manual Trigger con import dinámico requerido para prevenir SSR build crashes
                                 import('@/lib/tournamentService').then(async ({ fetchMatches }) => {
                                     if (tournamentId) {
                                         const { success, matches } = await fetchMatches(tournamentId);
@@ -301,7 +336,7 @@ export default function TableSelectPage() {
                 </div>
             </div>
 
-            {/* V6.4: MAGIC RECONNECT BANNER */}
+            {/* --- 6.2 Banner Magic Reconnect (orphanMatch) --- */}
             <AnimatePresence>
                 {orphanMatch && (
                     <motion.div
@@ -330,10 +365,8 @@ export default function TableSelectPage() {
                 )}
             </AnimatePresence>
 
-            {/* Main Action Area */}
+            {/* --- 6.3 Selección de rival (LiveMatchesRender) --- */}
             <div className="space-y-6 max-w-lg mx-auto">
-
-                {/* 1. Select Rival */}
                 <div className="bg-black/20 p-6 rounded-3xl backdrop-blur-sm border border-white/5 shadow-xl">
                     <div className="flex items-center gap-3 mb-6">
                         <div className="w-10 h-10 rounded-full bg-[#A5D6A7]/20 flex items-center justify-center text-[#A5D6A7]">
@@ -365,7 +398,7 @@ export default function TableSelectPage() {
                     )}
                 </div>
 
-                {/* 2. Action Button */}
+                {/* --- 6.4 Botón ¡A LA MESA! --- */}
                 <button
                     onClick={handleStartMatch}
                     disabled={!opponentPairNum}
@@ -381,7 +414,7 @@ export default function TableSelectPage() {
                     ¡A LA MESA!
                 </button>
 
-                {/* 3. Recent History (Redesigned Phase 3) */}
+                {/* --- 6.5 Histórico de resultados (filteredHistory) --- */}
                 {filteredHistory.length > 0 && (
                     <div className="mt-8 pt-8 border-t border-white/5">
                         <div className="flex items-center justify-between gap-4 mb-4">
@@ -471,7 +504,7 @@ export default function TableSelectPage() {
                 )}
             </div>
 
-            {/* Global Progress Indicator */}
+            {/* --- 6.6 Progreso global de la jornada --- */}
             <div className="mt-12 text-center max-w-lg mx-auto">
                 <p className="text-2xl font-bold opacity-80 uppercase tracking-widest mb-4 text-white">Progreso Global de la Jornada</p>
                 <div className="w-full h-8 bg-white/5 rounded-xl overflow-hidden border border-white/10 relative">
@@ -500,6 +533,9 @@ export default function TableSelectPage() {
     );
 }
 
+// ============================================================
+// BLOQUE 5: SUBCOMPONENTE LiveMatchesRender
+// ============================================================
 /**
  * LIVE MATCHES RENDERER (Pure Component - No Subscription)
  * Uses global store state via props or directly if connected.

@@ -1,5 +1,8 @@
 "use client";
 
+// ============================================================
+// BLOQUE 1: IMPORTS Y DEPENDENCIAS
+// ============================================================
 import { useEffect } from 'react';
 import { useTournamentStore } from "@/lib/store";
 import { supabase } from '@/lib/supabaseClient';
@@ -16,6 +19,11 @@ import { getActiveTournamentId, fetchTournamentConfig, fetchMatches } from '@/li
  * 2. Listen for "New Matches" (Realtime)
  * 3. Polling Fallback (Every 10s) for reliability
  */
+
+// ============================================================
+// BLOQUE 2: DEFINICIÓN DEL COMPONENTE (Setup)
+// ============================================================
+
 export default function GlobalSync() {
     const {
         tournamentId,
@@ -27,6 +35,10 @@ export default function GlobalSync() {
         syncMatches,
         nuclearReset
     } = useTournamentStore();
+
+    // ============================================================
+    // BLOQUE 3: EFECTO 1 - ESTADO GLOBAL DE LA APP (Jornada Activa)
+    // ============================================================
 
     // 1. GLOBAL STATE SYNC (App State) - "Jornada Activa"
     useEffect(() => {
@@ -127,6 +139,10 @@ export default function GlobalSync() {
         };
     }, [isSetupComplete, hostName]); // Re-run if local state changes significantly
 
+
+    // ============================================================
+    // BLOQUE 4: EFECTO 2 - FLUJO DE PARTIDAS (Match Sync & Polling)
+    // ============================================================
 
     // 2. MATCH SYNC (Realtime Gameplay) & POLLING
     useEffect(() => {
@@ -313,5 +329,8 @@ export default function GlobalSync() {
 
     }, [tournamentId]); // Only re-sub if tournamentId changes
 
+    // ============================================================
+    // BLOQUE 5: RENDER NULO (Headless Component)
+    // ============================================================
     return null; // This component renders nothing, just logic
 }

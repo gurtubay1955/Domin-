@@ -13,6 +13,9 @@
  * 5. SAVING: Committing the result to history via Zustand Store.
  */
 
+// ============================================================
+// BLOQUE 1: IMPORTS, INTERFACES Y PROPS
+// ============================================================
 import { useState, useRef, useEffect } from "react";
 import Numpad from "./Numpad";
 import { motion, AnimatePresence } from "framer-motion";
@@ -42,6 +45,9 @@ export default function ScoreBoard({
     pairIdB,
     isSpectator = false // V8.3
 }: ScoreBoardProps) {
+    // ============================================================
+    // BLOQUE 2: ESTADO LOCAL Y DERIVADOS
+    // ============================================================
     const router = useRouter();
     const [teamA, setTeamA] = useState(initialTeamA);
     const [teamB, setTeamB] = useState(initialTeamB);
@@ -51,11 +57,6 @@ export default function ScoreBoard({
     // QUANTUM UPGRADE: Connect to Store
     const { addMatch, tournamentId, liveScores } = useTournamentStore();
 
-    /**
-     * EFFECT: RESTORE SESSION
-     * Reads the "activeMatch" from storage to hydrate the names and pair IDs.
-     * This allows the page to survive a browser refresh.
-     */
     const [hands, setHands] = useState<Hand[]>([
         { handNumber: 1, pointsA: null, pointsB: null },
     ]);
@@ -72,29 +73,14 @@ export default function ScoreBoard({
     // WIN CONDITION: 100 Points or more
     const reachedTarget = totalA >= 100 || totalB >= 100;
 
-    const handleFinishGame = () => {
-        if (totalA >= 100) setWinner('A');
-        else if (totalB >= 100) setWinner('B');
-    };
+    // ============================================================
+    // BLOQUE 3: HIDRATACIÓN Y RECONEXIÓN MÁGICA
+    // ============================================================
 
-    // EFFECT: Play victory sounds
-    useEffect(() => {
-        if (winner) {
-            playVictory();
-            const loserScore = winner === 'A' ? totalB : totalA;
-            if (loserScore === 0) {
-                playZapatero('double');
-            } else if (loserScore <= 50) {
-                playZapatero('single');
-            }
-        }
-    }, [winner, totalA, totalB]);
-
-    /**
-     * EFFECT: RESTORE SESSION & HANDS
-     * Reads the "activeMatch" from storage to hydrate the names and pair IDs.
-     * Also restores "activeMatch_hands" if valid.
-     */
+    // FUNCIÓN/EFECTO: RESTORE SESSION & HANDS
+    // PROPÓSITO: Reads the "activeMatch" from storage to hydrate the names and pair IDs. Also restores "activeMatch_hands" if valid.
+    // DEPENDE DE: [] (Run ONCE on mount)
+    // LLAMADA POR: React Lifecycle (mount)
     useEffect(() => {
         // 1. Restore Match Config
         const matchStr = sessionStorage.getItem("activeMatch") || localStorage.getItem("activeMatch");
@@ -154,9 +140,34 @@ export default function ScoreBoard({
         } else {
             setIsInitialized(true);
         }
-    }, []); // Run ONCE on mount, independent of props
+    }, []);
 
-    // EFFECT: AUTO-SAVE HANDS & LIVE BROADCAST
+    // ============================================================
+    // BLOQUE 4: BROADCAST, SYNC Y HANDLERS DE EVENTOS
+    // ============================================================
+
+    // 4.1 useEffect de sonidos de victoria
+    // FUNCIÓN/EFECTO: Play victory sounds
+    // PROPÓSITO: Reproduce efectos de audio de victoria y/o de zapatero según el estado del partido
+    // DEPENDE DE: [winner, totalA, totalB]
+    // LLAMADA POR: React Lifecycle (cuando hay ganador detectado)
+    useEffect(() => {
+        if (winner) {
+            playVictory();
+            const loserScore = winner === 'A' ? totalB : totalA;
+            if (loserScore === 0) {
+                playZapatero('double');
+            } else if (loserScore <= 50) {
+                playZapatero('single');
+            }
+        }
+    }, [winner, totalA, totalB]);
+
+    // 4.2 useEffect de auto-save + broadcast live
+    // FUNCIÓN/EFECTO: AUTO-SAVE HANDS & LIVE BROADCAST
+    // PROPÓSITO: Guarda en memoria local y emite instantáneamente a Base de Datos en la nube
+    // DEPENDE DE: [hands, config, isInitialized, tournamentId, totalA, totalB, isSpectator]
+    // LLAMADA POR: Cambios reactivos en el score durante la partida del creador
     useEffect(() => {
         if (!isInitialized || isSpectator) return; // WAIT FOR RESTORE, AND SPECTATORS DO NOT BROADCAST
 
@@ -187,7 +198,11 @@ export default function ScoreBoard({
         }
     }, [hands, config, isInitialized, tournamentId, totalA, totalB, isSpectator]);
 
-    // V8.3: REACTIVE SPECTATOR SYNC
+    // 4.3 useEffect espectador reactivo V8.3
+    // FUNCIÓN/EFECTO: REACTIVE SPECTATOR SYNC
+    // PROPÓSITO: Escucha cambios pasivos del store (inyección de Supabase) para pintar puntajes en vivo si se es espectador
+    // DEPENDE DE: [liveScores, isSpectator, isInitialized, config.pairA, config.pairB]
+    // LLAMADA POR: Cambios en el Map inyectados pasivamente desde GlobalSync
     useEffect(() => {
         if (isSpectator && isInitialized && config.pairA && config.pairB) {
             const pA = Math.min(config.pairA, config.pairB);
@@ -213,6 +228,28 @@ export default function ScoreBoard({
         }
     }, [liveScores, isSpectator, isInitialized, config.pairA, config.pairB]);
 
+    // 4.4 useEffect de scroll automático
+    // FUNCIÓN/EFECTO: Auto-scroll a últimas manos
+    // PROPÓSITO: Mantener la vista apuntando a la mano actual en curso
+    // DEPENDE DE: [hands, activeCell]
+    // LLAMADA POR: React Lifecycle 
+    useEffect(() => {
+        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }, [hands, activeCell]);
+
+    // 4.5 handleFinishGame
+    // FUNCIÓN/EFECTO: handleFinishGame
+    // PROPÓSITO: Setea `winner` al comprobar que un equipo alcanzó el Target
+    // LLAMADA POR: Evento onClick del botón "Fin de la Partida"    
+    const handleFinishGame = () => {
+        if (totalA >= 100) setWinner('A');
+        else if (totalB >= 100) setWinner('B');
+    };
+
+    // 4.6 handleSaveAndExit
+    // FUNCIÓN/EFECTO: handleSaveAndExit
+    // PROPÓSITO: Registra permanentemente la victoria en Base de Datos y limpia cachés reactivas
+    // LLAMADA POR: Evento onClick del botón "FINALIZAR JUEGO" (Modal Game Over)
     const handleSaveAndExit = async () => {
         if (!winner || isSaving) return;
         playClick(); // Feedback for action
@@ -264,6 +301,11 @@ export default function ScoreBoard({
         router.push('/table-select');
     };
 
+    // 4.7 handleInput
+    // FUNCIÓN/EFECTO: handleInput
+    // PROPÓSITO: Controla el input numérico en la celda activa 
+    // RECIBE: num: number -> El dígito tocado (0-9)
+    // LLAMADA POR: Evento onInput del componente Numpad
     const handleInput = (num: number) => {
         if (!activeCell || winner) return;
         setHands(prev => {
@@ -285,6 +327,10 @@ export default function ScoreBoard({
         });
     };
 
+    // 4.8 handleDelete
+    // FUNCIÓN/EFECTO: handleDelete
+    // PROPÓSITO: Borra un dígito como un backspace normal en el teclado numérico en pantalla
+    // LLAMADA POR: Evento onDelete del componente Numpad
     const handleDelete = () => {
         if (!activeCell) return;
         setHands(prev => {
@@ -306,6 +352,10 @@ export default function ScoreBoard({
         });
     };
 
+    // 4.9 handleEnter
+    // FUNCIÓN/EFECTO: handleEnter
+    // PROPÓSITO: Quita el foco de la celda, y si es la última mano disponible y tiene valores numéricos, crea una nueva fila o mano vacía para el array
+    // LLAMADA POR: Evento onEnter del componente Numpad
     const handleEnter = () => {
         if (!activeCell) return;
         const currentHand = hands[activeCell.handResultIndex];
@@ -322,22 +372,29 @@ export default function ScoreBoard({
         }
     };
 
+    // 4.10 selectCell
+    // FUNCIÓN/EFECTO: selectCell
+    // PROPÓSITO: Cambia o desactiva la celda con el "foco" actual (bloqueo UI vía isSpectator)
+    // RECIBE: index (índice en array) y team ('A' u 'B')
+    // LLAMADA POR: onClick en las barras numéricas de cada equipo
     const selectCell = (index: number, team: 'A' | 'B') => {
         if (isSpectator) return; // V8.3 Soft-Lock: No interaction allowed
         setActiveCell({ handResultIndex: index, team });
     };
 
-    useEffect(() => {
-        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }, [hands, activeCell]);
-
+    // ============================================================
+    // BLOQUE 5: RENDER Y JSX
+    // ============================================================
     return (
         <div className="flex flex-col h-[100dvh] w-full md:max-w-2xl mx-auto bg-[#4A3B32] text-[#FDFBF7] font-hand overflow-hidden relative shadow-2xl">
+            {/* --- 5.1 Banner Modo Espectador --- */}
             {isSpectator && (
                 <div className="w-full bg-red-600 text-white text-center py-1 font-bold tracking-widest uppercase text-sm z-50 animate-pulse">
                     ⚠️ MODO ESPECTADOR (SÓLO LECTURA)
                 </div>
             )}
+
+            {/* --- 5.2 Header con nombres de equipos --- */}
             <div className={`flex justify-between items-center px-4 py-0.5 border-b border-white/10 bg-[#4A3B32] z-30 shadow-md ${!isSpectator ? 'sticky top-0' : ''}`}>
                 <div className="flex flex-col items-center w-1/2 border-r border-white/10">
                     <div className="flex flex-col items-center text-base font-bold text-[#A5D6A7] whitespace-nowrap leading-[0.7] gap-0">
@@ -356,6 +413,7 @@ export default function ScoreBoard({
                 </div>
             </div>
 
+            {/* --- 5.3 Tabla de manos (scrollable) --- */}
             <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-2 pb-40">
                 <AnimatePresence>
                     {hands.map((hand, index) => (
@@ -372,6 +430,7 @@ export default function ScoreBoard({
                 </AnimatePresence>
             </div>
 
+            {/* --- 5.4 Banner de victoria alcanzada --- */}
             {reachedTarget && !winner && !isSpectator && (
                 <div className="bg-orange-500/10 border-t border-orange-500/30 p-4 animate-in slide-in-from-bottom-5 duration-300">
                     <p className="text-orange-300 text-center text-xl font-bold uppercase tracking-wider mb-3">⚠️ Revisar los datos antes de confirmar</p>
@@ -379,6 +438,7 @@ export default function ScoreBoard({
                 </div>
             )}
 
+            {/* --- 5.5 Footer con totales --- */}
             <div className={`bg-[#3E3129] border-t border-white/10 p-4 pb-8 flex justify-between items-center z-20 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]`}>
                 <motion.div
                     key={`score-a-${totalA}`} // Prefix to ensure unique key
@@ -398,6 +458,7 @@ export default function ScoreBoard({
                 </motion.div>
             </div>
 
+            {/* --- 5.6 Numpad (modal deslizable) --- */}
             <AnimatePresence>
                 {activeCell && (
                     <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: "spring", damping: 25, stiffness: 300 }} className="absolute bottom-0 left-0 right-0 bg-[#FDFBF7] p-4 pt-6 pb-16 rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.3)] z-50 text-[#4A3B32]">
@@ -407,6 +468,7 @@ export default function ScoreBoard({
                 )}
             </AnimatePresence>
 
+            {/* --- 5.7 Modal de Game Over --- */}
             {winner && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-xl p-4">
                     <motion.div

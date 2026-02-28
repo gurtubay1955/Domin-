@@ -1,3 +1,6 @@
+// ============================================================
+// BLOQUE 1: IMPORTS
+// ============================================================
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { useEffect, useState } from 'react';
@@ -13,6 +16,10 @@ import { useEffect, useState } from 'react';
  * 
  * SOLUCIÓN: Protocolo atómico de reset con estados de control
  */
+
+// ============================================================
+// BLOQUE 2: INTERFACES Y TIPOS DEL STORE
+// ============================================================
 
 export interface MatchRecord {
     id: string;
@@ -56,7 +63,9 @@ interface TournamentState {
     _isResetting: boolean;          // ¿Estamos en medio de un reset?
     _resetTimestamp: number | null; // Cuándo fue el último reset
 
-    // Acciones principales
+    // ============================================================
+    // Acciones principales (Se implementan en Bloque 3 y 4)
+    // ============================================================
     initializeTournament: (id: string, host: string, pairs: Record<string, string[]>, existingMatches?: MatchRecord[], pairUuidMap?: Record<string, number>) => void;
     addMatch: (match: MatchRecord) => void;
     syncMatch: (match: MatchRecord) => void; // ☁️ V4.1: Recibir de la nube
@@ -95,7 +104,16 @@ export const useTournamentStore = create<TournamentState>()(
             _isResetting: false,
             _resetTimestamp: null,
 
-            // Acciones principales
+            // ============================================================
+            // BLOQUE 3: ESTADO INICIAL Y ACCIONES PRINCIPALES
+            // ============================================================
+
+            // FUNCIÓN: initializeTournament
+            // PROPÓSITO: Establece el estado inicial del torneo y marca como completado el setup.
+            // RECIBE: id, host, pairs, existingMatches, pairUuidMap
+            // RETORNA: void
+            // DEPENDE DE: Zustand set()
+            // LLAMADA POR: UI (Setup Finalization) y GlobalSync (Hydration)
             initializeTournament: (id, host, pairs, existingMatches = [], pairUuidMap = {}) => {
                 console.log("🌀 STORE: Inicializando torneo...", id);
                 set({
@@ -109,6 +127,12 @@ export const useTournamentStore = create<TournamentState>()(
                 });
             },
 
+            // FUNCIÓN: addMatch
+            // PROPÓSITO: Registra una partida completada localmente previniendo duplicados y limpiando live.
+            // RECIBE: match
+            // RETORNA: void
+            // DEPENDE DE: Zustand set(), state.matchHistory, state.liveScores
+            // LLAMADA POR: UI (Game board cuando termina partida)
             addMatch: (match) => {
                 set((state) => {
                     // Prevenir duplicados
@@ -132,6 +156,12 @@ export const useTournamentStore = create<TournamentState>()(
                 });
             },
 
+            // FUNCIÓN: syncMatch
+            // PROPÓSITO: Recibe una partida completada desde realtime subscription y limpia live scores de esa mesa.
+            // RECIBE: match
+            // RETORNA: void
+            // DEPENDE DE: Zustand set(), state.matchHistory, state.liveScores
+            // LLAMADA POR: GlobalSync (Realtime Insert Event)
             syncMatch: (match) => {
                 set((state) => {
                     // Prevenir duplicados estrictos (CRÍTICO para eventos realtime de la misma partida)
@@ -156,6 +186,12 @@ export const useTournamentStore = create<TournamentState>()(
                 });
             },
 
+            // FUNCIÓN: syncMatches
+            // PROPÓSITO: Recibe lotes de partidas (polling fallback) evitando duplicados.
+            // RECIBE: matches
+            // RETORNA: void
+            // DEPENDE DE: Zustand set(), state.matchHistory, state.liveScores
+            // LLAMADA POR: GlobalSync (Polling Loop cada 5s)
             syncMatches: (matches) => {
                 set((state) => {
                     // Filter out existing matches
@@ -180,7 +216,27 @@ export const useTournamentStore = create<TournamentState>()(
                 });
             },
 
-            // 🔴 V4.5 LIVE SYNC ACTION
+            // FUNCIÓN: getPairNames
+            // PROPÓSITO: Obtiene los nombres de los jugadores de una pareja.
+            // RECIBE: pairId (número de pareja)
+            // RETORNA: string[]
+            // DEPENDE DE: Zustand get(), state.pairs
+            // LLAMADA POR: Múltiples componentes UI (Leaderboard, Game)
+            getPairNames: (pairId) => {
+                const state = get();
+                return state.pairs[pairId.toString()] || ["Desconocido", "Desconocido"];
+            },
+
+            // ============================================================
+            // BLOQUE 4: SINCRONIZACIÓN DE MARCADORES EN VIVO
+            // ============================================================
+
+            // FUNCIÓN: syncLiveMatch
+            // PROPÓSITO: Actualiza un marcador en vivo proveniente de la nube si la partida no está ya en historial.
+            // RECIBE: data (LiveMatchData)
+            // RETORNA: void
+            // DEPENDE DE: Zustand set(), state.liveScores, state.matchHistory
+            // LLAMADA POR: GlobalSync (Realtime Update Event)
             syncLiveMatch: (data) => {
                 set((state) => {
                     const key = `${data.pairA}-${data.pairB}`;
@@ -205,7 +261,12 @@ export const useTournamentStore = create<TournamentState>()(
                 });
             },
 
-            // 🧹 V5.0: REMOVE LIVE MATCH (Realtime DELETE)
+            // FUNCIÓN: removeLiveScore
+            // PROPÓSITO: Elimina del local un marcador en vivo específico con llave de pares ordenada.
+            // RECIBE: pairA, pairB
+            // RETORNA: void
+            // DEPENDE DE: Zustand set(), state.liveScores
+            // LLAMADA POR: GlobalSync (Realtime Delete Event)
             removeLiveScore: (pairA, pairB) => {
                 set((state) => {
                     const key = `${pairA}-${pairB}`;
@@ -217,7 +278,12 @@ export const useTournamentStore = create<TournamentState>()(
                 });
             },
 
-            // 🔄 V5.0: SET FULL LIVE SCORES (Polling Replacement)
+            // FUNCIÓN: setLiveScores
+            // PROPÓSITO: Reemplaza toda la lista de marcadores (utilizado en el fallback de polling).
+            // RECIBE: fullList (LiveMatchData[])
+            // RETORNA: void
+            // DEPENDE DE: Zustand set(), state.matchHistory
+            // LLAMADA POR: GlobalSync (Polling Loop cada 2s)
             setLiveScores: (fullList) => {
                 set((state) => {
                     const newLive: Record<string, LiveMatchData> = {};
@@ -244,20 +310,50 @@ export const useTournamentStore = create<TournamentState>()(
                 });
             },
 
-            // 🔄 Acciones de control anti-zombie
+            // ============================================================
+            // BLOQUE 5: CONTROL ANTI-ZOMBIE (Estados de Control)
+            // ============================================================
+
+            // FUNCIÓN: markAsHydrated
+            // PROPÓSITO: Establece la bandera _hasHydrated a true (listo para procesar datos local storage).
+            // RECIBE: void
+            // RETORNA: void
+            // DEPENDE DE: Zustand set()
+            // LLAMADA POR: Middleware onRehydrateStorage
             markAsHydrated: () => {
                 set({ _hasHydrated: true });
             },
 
+            // FUNCIÓN: beginReset
+            // PROPÓSITO: Bandera para informar a la UI y middleware que se está realizando un delete masivo local.
+            // RECIBE: void
+            // RETORNA: void
+            // DEPENDE DE: Zustand set()
+            // LLAMADA POR: hardReset / nuclearReset
             beginReset: () => {
                 set({ _isResetting: true, _resetTimestamp: Date.now() });
             },
 
+            // FUNCIÓN: completeReset
+            // PROPÓSITO: Baja la bandera cerrando la ventana de destrucción, habilitando estado de nuevo.
+            // RECIBE: void
+            // RETORNA: void
+            // DEPENDE DE: Zustand set()
+            // LLAMADA POR: finalización de Async reseters
             completeReset: () => {
                 set({ _isResetting: false });
             },
 
-            // 💣 Nivel 1: Reset Suave (solo memoria)
+            // ============================================================
+            // BLOQUE 6: NIVELES DE RESET
+            // ============================================================
+
+            // FUNCIÓN: softReset
+            // PROPÓSITO: Nivel 1 - Solo limpia la memoria de forma sincrónica. Mantiene hidratación on pero valores vacíos.
+            // RECIBE: void
+            // RETORNA: void
+            // DEPENDE DE: Zustand set()
+            // LLAMADA POR: Middleware onRehydrate si entra durante un _isResetting
             softReset: () => {
                 console.log("🔄 Reset suave: solo memoria");
                 set({
@@ -272,7 +368,12 @@ export const useTournamentStore = create<TournamentState>()(
                 });
             },
 
-            // 💣💣 Nivel 2: Reset Duro (memoria + localStorage)
+            // FUNCIÓN: hardReset
+            // PROPÓSITO: Nivel 2 - Limpia memoria, marca beginReset y vacía localStorage asíncronamente.
+            // RECIBE: void
+            // RETORNA: Promise<void>
+            // DEPENDE DE: Window.localStorage, timeout
+            // LLAMADA POR: clearTournament() en UI (Salidas voluntarias de torneo)
             hardReset: () => {
                 return new Promise<void>((resolve) => {
                     console.log("💥 Reset duro: memoria + localStorage");
@@ -309,7 +410,12 @@ export const useTournamentStore = create<TournamentState>()(
                 });
             },
 
-            // 💣💣💣 Nivel 3: Reset Nuclear (TODO + recarga)
+            // FUNCIÓN: nuclearReset
+            // PROPÓSITO: Nivel 3 - Destruye memoria, inyecta localStorage zombie "muerto", limpia Caches (Service Workers PWA), SessionStorage y lanza desactivación remota. Termina forzando un reload real de la URL para invalidar caché de app de React.
+            // RECIBE: void
+            // RETORNA: Promise<void>
+            // DEPENDE DE: Window, localStorage, caches, ServiceWorker, Supabase Network (deactivateTournament)
+            // LLAMADA POR: Botón maestro The Big Red Button de Host.
             nuclearReset: async () => {
                 console.log("☢️ RESET NUCLEAR: Destruyendo todo...");
 
@@ -385,16 +491,20 @@ export const useTournamentStore = create<TournamentState>()(
                 });
             },
 
-            // Para compatibilidad con código antiguo
+            // FUNCIÓN: clearTournament
+            // PROPÓSITO: Alias genérico para invocar un Hard Reset.
+            // RECIBE: void
+            // RETORNA: void
+            // DEPENDE DE: Zustand get(), hardReset
+            // LLAMADA POR: UI genérica
             clearTournament: () => {
                 get().hardReset();
             },
-
-            getPairNames: (pairId) => {
-                const state = get();
-                return state.pairs[pairId.toString()] || ["Desconocido", "Desconocido"];
-            }
         }),
+
+        // ============================================================
+        // BLOQUE 7: CONFIGURACIÓN PERSIST (Zustand Middleware)
+        // ============================================================
         {
             name: 'pitomate-storage-v2',
             storage: createJSONStorage(() => localStorage),
@@ -433,9 +543,19 @@ export const useTournamentStore = create<TournamentState>()(
     )
 );
 
+// ============================================================
+// BLOQUE 8: HOOK DE SEGURIDAD EXTERNO
+// ============================================================
+
 /**
  * 🛡️ HOOK DE SEGURIDAD: Previene uso de datos no hidratados
  */
+// FUNCIÓN: useSafeTournamentStore
+// PROPÓSITO: Hook de wrapper de Zustand que bloquea UI si hay un hydratación pendiente o reset ocurriendo.
+// RECIBE: void
+// RETORNA: Object spreaded state + safe flags
+// DEPENDE DE: useTournamentStore
+// LLAMADA POR: Todos los Componentes principales de la UI para extracción de datos seguros
 export const useSafeTournamentStore = () => {
     const store = useTournamentStore();
     const [isReady, setIsReady] = useState(false);
