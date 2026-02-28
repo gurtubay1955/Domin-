@@ -235,7 +235,7 @@ export const getCompletedTournamentsCount = async () => {
  * Updates the ephemeral score state in Supabase.
  * Call this every time a hand is finished.
  */
-export const updateLiveMatch = async (tournamentId: string, myPair: number, oppPair: number, scoreMy: number, scoreOpp: number, handNum: number) => {
+export const updateLiveMatch = async (tournamentId: string, myPair: number, oppPair: number, scoreMy: number, scoreOpp: number, handNum: number, scorekeeper?: string) => {
     // 1. Normalize Keys (Pair A always smaller)
     const isASmaller = myPair < oppPair;
     const pairA = isASmaller ? myPair : oppPair;
@@ -244,17 +244,24 @@ export const updateLiveMatch = async (tournamentId: string, myPair: number, oppP
     const scoreB = isASmaller ? scoreOpp : scoreMy;
 
     try {
+        const payload: any = {
+            tournament_id: tournamentId,
+            pair_a: pairA,
+            pair_b: pairB,
+            score_a: scoreA,
+            score_b: scoreB,
+            hand_number: handNum,
+            last_updated: new Date().toISOString()
+        };
+
+        // V8.3 Soft-Lock: Solo inyectamos scorekeeper si nos lo pasan.
+        if (scorekeeper) {
+            payload.scorekeeper = scorekeeper;
+        }
+
         const { error } = await supabase
             .from('live_matches')
-            .upsert({
-                tournament_id: tournamentId,
-                pair_a: pairA,
-                pair_b: pairB,
-                score_a: scoreA,
-                score_b: scoreB,
-                hand_number: handNum,
-                last_updated: new Date().toISOString()
-            });
+            .upsert(payload);
 
         if (error) throw error;
     } catch (e) {

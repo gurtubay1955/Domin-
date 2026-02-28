@@ -80,6 +80,7 @@ export default function GamePage() {
                 initialTeamB={teamBNames}
                 pairIdA={matchConfig?.myPair}
                 pairIdB={matchConfig?.opponentPair}
+                isSpectator={matchConfig?.isSpectator || false}
             />
         </div>
     );

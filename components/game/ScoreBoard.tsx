@@ -32,13 +32,15 @@ interface ScoreBoardProps {
     initialTeamB?: string[];
     pairIdA?: number;
     pairIdB?: number;
+    isSpectator?: boolean; // V8.3 Soft-Lock
 }
 
 export default function ScoreBoard({
     initialTeamA = ["Nosotros 1", "Nosotros 2"],
     initialTeamB = ["Ellos 1", "Ellos 2"],
     pairIdA,
-    pairIdB
+    pairIdB,
+    isSpectator = false // V8.3
 }: ScoreBoardProps) {
     const router = useRouter();
     const [teamA, setTeamA] = useState(initialTeamA);
@@ -47,7 +49,7 @@ export default function ScoreBoard({
     const [isSaving, setIsSaving] = useState(false);
 
     // QUANTUM UPGRADE: Connect to Store
-    const { addMatch, tournamentId } = useTournamentStore();
+    const { addMatch, tournamentId, liveScores } = useTournamentStore();
 
     /**
      * EFFECT: RESTORE SESSION
@@ -156,7 +158,7 @@ export default function ScoreBoard({
 
     // EFFECT: AUTO-SAVE HANDS & LIVE BROADCAST
     useEffect(() => {
-        if (!isInitialized) return; // WAIT FOR RESTORE
+        if (!isInitialized || isSpectator) return; // WAIT FOR RESTORE, AND SPECTATORS DO NOT BROADCAST
 
         if (config.pairA && config.pairB) {
             // 1. Local Persistence
@@ -183,7 +185,33 @@ export default function ScoreBoard({
                 });
             }
         }
-    }, [hands, config, isInitialized, tournamentId, totalA, totalB]);
+    }, [hands, config, isInitialized, tournamentId, totalA, totalB, isSpectator]);
+
+    // V8.3: REACTIVE SPECTATOR SYNC
+    useEffect(() => {
+        if (isSpectator && isInitialized && config.pairA && config.pairB) {
+            const pA = Math.min(config.pairA, config.pairB);
+            const pB = Math.max(config.pairA, config.pairB);
+            const key = `${pA}-${pB}`;
+            const liveData = liveScores[key];
+
+            if (liveData) {
+                const isASmaller = config.pairA < config.pairB;
+                const currentTotalA = isASmaller ? liveData.scoreA : liveData.scoreB;
+                const currentTotalB = isASmaller ? liveData.scoreB : liveData.scoreA;
+
+                // Sincroniza la pizarra visualmente inyectando una mano acumulada
+                setHands([{
+                    handNumber: liveData.handNumber || 1,
+                    pointsA: currentTotalA,
+                    pointsB: currentTotalB
+                }]);
+            } else {
+                // Si la mesa desapareció en Real-time, el dueño la cerró o borró.
+                // Podría mostrarse un mensaje, pero el polling del Lobby lo sacará.
+            }
+        }
+    }, [liveScores, isSpectator, isInitialized, config.pairA, config.pairB]);
 
     const handleSaveAndExit = async () => {
         if (!winner || isSaving) return;
@@ -295,6 +323,7 @@ export default function ScoreBoard({
     };
 
     const selectCell = (index: number, team: 'A' | 'B') => {
+        if (isSpectator) return; // V8.3 Soft-Lock: No interaction allowed
         setActiveCell({ handResultIndex: index, team });
     };
 
@@ -304,7 +333,12 @@ export default function ScoreBoard({
 
     return (
         <div className="flex flex-col h-[100dvh] w-full md:max-w-2xl mx-auto bg-[#4A3B32] text-[#FDFBF7] font-hand overflow-hidden relative shadow-2xl">
-            <div className="flex justify-between items-center px-4 py-0.5 border-b border-white/10 bg-[#4A3B32] z-30 shadow-md sticky top-0">
+            {isSpectator && (
+                <div className="w-full bg-red-600 text-white text-center py-1 font-bold tracking-widest uppercase text-sm z-50 animate-pulse">
+                    ⚠️ MODO ESPECTADOR (SÓLO LECTURA)
+                </div>
+            )}
+            <div className={`flex justify-between items-center px-4 py-0.5 border-b border-white/10 bg-[#4A3B32] z-30 shadow-md ${!isSpectator ? 'sticky top-0' : ''}`}>
                 <div className="flex flex-col items-center w-1/2 border-r border-white/10">
                     <div className="flex flex-col items-center text-base font-bold text-[#A5D6A7] whitespace-nowrap leading-[0.7] gap-0">
                         <span className="text-2xl">{teamA[0]}</span>
@@ -338,7 +372,7 @@ export default function ScoreBoard({
                 </AnimatePresence>
             </div>
 
-            {reachedTarget && !winner && (
+            {reachedTarget && !winner && !isSpectator && (
                 <div className="bg-orange-500/10 border-t border-orange-500/30 p-4 animate-in slide-in-from-bottom-5 duration-300">
                     <p className="text-orange-300 text-center text-xl font-bold uppercase tracking-wider mb-3">⚠️ Revisar los datos antes de confirmar</p>
                     <button onClick={handleFinishGame} className="w-full py-4 bg-orange-500 text-white text-2xl font-bold rounded-xl shadow-[0_0_20px_rgba(249,115,22,0.4)] hover:bg-orange-600 active:scale-[0.98] transition-all">Fin de la Partida</button>

@@ -38,6 +38,7 @@ export interface LiveMatchData {
     scoreB: number;
     handNumber: number;
     lastUpdated: string;
+    scorekeeper?: string; // V8.3 Soft-Lock 
 }
 
 interface TournamentState {

@@ -142,35 +142,53 @@ export default function TableSelectPage() {
             return;
         }
 
-        // 🔴 V4.8: Create live_matches entry IMMEDIATELY
-        // This notifies all other devices that these pairs are now "seated at a table"
+        let isSpectator = false;
+        let finalScorekeeper = currentUser;
+
         try {
-            console.log("📤 Attempting to update live_matches...");
-            const { updateLiveMatch } = await import('@/lib/tournamentService');
+            console.log("📤 Performing Pre-Flight Check on live_matches...");
+            const { updateLiveMatch, checkActiveMatchForPair } = await import('@/lib/tournamentService');
 
-            const result = await updateLiveMatch(
-                tournamentId,
-                myPairNum,
-                opponentPairNum,
-                0, // Initial score
-                0,
-                0  // hand_number = 0 means "seated but haven't started playing yet"
-            );
+            // NEW V8.3 LOGIC: Pre-Flight Check (Soft-Lock)
+            const preFlight = await checkActiveMatchForPair(tournamentId, myPairNum);
 
-            console.log('✅ V4.8: Opponents marked as SEATED in live_matches', result);
+            if (preFlight.success && preFlight.hasActiveMatch && preFlight.matchData) {
+                // Hay una mesa viva. Verificamos dueño.
+                const existingKeeper = preFlight.matchData.scorekeeper;
+                if (existingKeeper && existingKeeper !== currentUser) {
+                    console.warn(`🛑 Soft-Lock: La mesa pertenece a ${existingKeeper}. Entrando como Espectador.`);
+                    isSpectator = true;
+                    finalScorekeeper = existingKeeper;
+                    alert(`⚠️ ${existingKeeper} ya está anotando los puntos en esta mesa.\n\nEntrarás en Modo Espectador (Solo Lectura).`);
+                }
+            }
+
+            if (!isSpectator) {
+                // Si no soy espectador, soy el creador. Reclamo/Actualizo la mesa con mi nombre.
+                const result = await updateLiveMatch(
+                    tournamentId,
+                    myPairNum,
+                    opponentPairNum,
+                    0,
+                    0,
+                    0,
+                    finalScorekeeper
+                );
+                console.log('✅ V8.3: Opponents marked as SEATED in live_matches. Owner:', finalScorekeeper);
+            }
         } catch (error) {
-            console.error('❌ Failed to update live_matches:', error);
-            // Don't block the user, just log the error
+            console.error('❌ Failed to verify/update live_matches:', error);
+            // Si falla la red, los dejamos pasar pero asumen el rol local de creador.
         }
 
         // Create a Session Config Object for the Game Page
-        // (This remains transient session state, not store state, because it's "in progress")
         const matchConfig = {
-            scorer: currentUser,
+            scorer: currentUser, // Tu nombre local
             myPair: myPairNum,
             opponentPair: opponentPairNum,
             myPartner: myPartner,
-            oppNames: pairs[opponentPairNum.toString()]
+            oppNames: pairs[opponentPairNum.toString()],
+            isSpectator: isSpectator // V8.3 Soft-Lock Flag
         };
 
         const configStr = JSON.stringify(matchConfig);
@@ -192,13 +210,23 @@ export default function TableSelectPage() {
         const isPairA = orphanMatch.pair_a === myPairNum;
         const opponentPairNum = isPairA ? orphanMatch.pair_b : orphanMatch.pair_a;
 
+        // Determinar si en la mesa huérfana yo soy el espectador
+        let isSpectator = false;
+        if (orphanMatch.scorekeeper && orphanMatch.scorekeeper !== currentUser) {
+            isSpectator = true;
+            alert(`⚠️ Estás regresando a la mesa de ${orphanMatch.scorekeeper}.\n\nReconectado como Espectador (Solo Lectura).`);
+        } else {
+            console.log(`✅ Reconectado como Creador a mi partida.`);
+        }
+
         // Rebuild Session Config Object
         const matchConfig = {
             scorer: currentUser,
             myPair: myPairNum,
             opponentPair: opponentPairNum,
             myPartner: myPartner,
-            oppNames: pairs[opponentPairNum.toString()] || ["Desconocido 1", "Desconocido 2"]
+            oppNames: pairs[opponentPairNum.toString()] || ["Desconocido 1", "Desconocido 2"],
+            isSpectator: isSpectator
         };
 
         const configStr = JSON.stringify(matchConfig);

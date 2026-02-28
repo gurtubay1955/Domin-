@@ -228,7 +228,8 @@ export default function GlobalSync() {
                         scoreA: m.score_a,
                         scoreB: m.score_b,
                         handNumber: m.hand_number,
-                        lastUpdated: m.last_updated
+                        lastUpdated: m.last_updated,
+                        scorekeeper: m.scorekeeper // V8.3
                     });
                 }
             )
@@ -271,7 +272,8 @@ export default function GlobalSync() {
                 scoreA: m.score_a,
                 scoreB: m.score_b,
                 handNumber: m.hand_number,
-                lastUpdated: m.last_updated
+                lastUpdated: m.last_updated,
+                scorekeeper: m.scorekeeper // V8.3
             }));
 
             setLiveScores(cleanList);
