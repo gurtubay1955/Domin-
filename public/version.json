@@ -1,10 +1,10 @@
 {
-  "version": "8.4.0",
-  "buildTime": "2026-03-01T12:51:00Z",
+  "version": "9.1.1",
+  "buildTime": "2026-03-01T13:45:00Z",
   "features": [
-    "Real-time host sync",
-    "Real-time opponent selection sync",
-    "Auto-update system",
-    "Reset Nuclear desde Resultados (V8.4.0)"
+    "Sistema V9 Titanium Secure",
+    "Reset Nuclear desde Resultados (V9.1.0)",
+    "iPhone Layout Fix: 'Bloque Negro' eliminado (V9.1.1)",
+    "Auto-update system"
   ]
 }

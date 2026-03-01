@@ -177,7 +177,7 @@ export default function Home() {
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#5e4b41] via-[#4A3B32] to-[#2d241f] text-[#FDFBF7] font-hand flex items-center justify-center p-4">
 
       {/* Decorative Elements */}
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none hidden md:block">
         <div className="absolute top-10 right-10 w-72 h-72 bg-white/5 rounded-full blur-3xl"></div>
         <div className="absolute bottom-10 left-10 w-96 h-96 bg-black/20 rounded-full blur-3xl"></div>
       </div>
@@ -310,7 +310,7 @@ export default function Home() {
 
         <div className="flex flex-col items-center gap-6 opacity-40 text-xl text-center font-bold tracking-widest mt-8">
           <Users size={18} />
-          <span>SISTEMA V9.1.0 (TITANIUM)</span>
+          <span>SISTEMA V9.1.1 (TITANIUM)</span>
         </div>
 
         <div className="flex gap-6 mt-4">
