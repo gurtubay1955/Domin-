@@ -1,10 +1,10 @@
 {
-  "version": "9.1.1",
+  "version": "10.0.0",
   "buildTime": "2026-03-01T13:45:00Z",
   "features": [
     "Sistema V9 Titanium Secure",
     "Reset Nuclear desde Resultados (V9.1.0)",
-    "iPhone Layout Fix: 'Bloque Negro' eliminado (V9.1.1)",
+    "Platinum Stats: Sincronización oficial al 26 Feb (V10.0.0)",
     "Auto-update system"
   ]
 }

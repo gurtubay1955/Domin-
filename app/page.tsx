@@ -310,7 +310,7 @@ export default function Home() {
 
         <div className="flex flex-col items-center gap-6 opacity-40 text-xl text-center font-bold tracking-widest mt-8">
           <Users size={18} />
-          <span>SISTEMA V9.1.1 (TITANIUM)</span>
+          <span>SISTEMA V10.0.0 (PLATINUM)</span>
         </div>
 
         <div className="flex gap-6 mt-4">
