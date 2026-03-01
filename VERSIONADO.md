@@ -4,6 +4,17 @@ Este documento es la fuente de verdad para el historial de versiones del proyect
 
 ---
 
+## [10.0.0] - 2026-03-01
+### Añadido
+- **PLATINUM STATS:** Saneamiento completo de la base de datos histórica.
+- **Sincronización Real:** Inyectados los resultados oficiales al 26 de febrero (Anfitrión: Mayito).
+- **Consolidación Individual:** Los puntos de campeonato reflejan ahora `Asistencias + Victorias` reales.
+
+## [9.1.1] - 2026-03-01
+### Corregido
+- **iPhone Layout Fix:** Eliminado un artefacto visual ("bloque negro") en la cabecera provocado por elementos decorativos con Blur en Safari móvil.
+- Sincronización de componentes de versionado (`VersionChecker`, `package.json`).
+
 ## [9.1.0] - 2026-03-01
 ### Añadido
 - **Reset Nuclear en Resultados:** El botón "Iniciar Nueva Jornada" ahora ejecuta un `DELETE` en cascada en la base de datos para borrar jornadas de prueba sin ensuciar la analítica.
