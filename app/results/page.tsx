@@ -13,7 +13,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Trophy, Medal, ArrowLeft, Save, ShieldCheck, RefreshCw } from "lucide-react";
-import { archiveTournament } from "@/lib/tournamentService";
+import { archiveTournament, deactivateTournament } from "@/lib/tournamentService";
 import { useTournamentStore } from "@/lib/store"; // Quantum Store
 import PinGuard from "@/components/PinGuard"; // Guard
 
@@ -285,9 +285,10 @@ export default function ResultsPage() {
                     <div>
                         {/* 5. Protected Reset */}
                         <PinGuard
-                            onVerify={() => {
+                            onVerify={async () => {
+                                await deactivateTournament();
                                 clearTournament();
-                                router.push("/"); // Direct to home (setup config)
+                                window.location.href = "/"; // Direct to home & force full reload
                             }}
                             title="Reset Total"
                             description="⚠️ ¿Borrar todo e iniciar nueva jornada?"

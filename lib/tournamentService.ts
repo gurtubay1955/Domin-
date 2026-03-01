@@ -330,6 +330,7 @@ export const updateHostName = async (hostName: string) => {
             .from('tournaments')
             .select('id')
             .eq('date', today)
+            .limit(1)
             .maybeSingle();
 
         if (fetchError) throw fetchError;
@@ -411,20 +412,21 @@ export const deactivateTournament = async () => {
 
         const activeTournamentId = appState?.value?.active_tournament_id;
 
-        // 2. Clear host_name from tournaments table if there's an active tournament
+        // 2. TRUE NUCLEAR RESET: Delete the tournament completely to avoid statistical pollution
         if (activeTournamentId) {
-            console.log("🧹 Clearing host_name from tournament:", activeTournamentId);
+            console.log("💣 NUCLEAR RESET DDBB: Deleting tournament permanently:", activeTournamentId);
             await supabase
                 .from('tournaments')
-                .update({ host_name: null })
+                .delete()
                 .eq('id', activeTournamentId);
         }
 
-        // 3. Also clear host_name from today's tournament (in case it's a different one)
+        // 3. Optional but safe: Also delete any orphaned tournament created today that wasn't archived
         const today = new Date().toISOString().split('T')[0];
         await supabase
             .from('tournaments')
-            .update({ host_name: null })
+            .delete()
+            .is('host_name', null)
             .eq('date', today);
 
         // 4. Deactivate tournament in app_state
@@ -437,7 +439,7 @@ export const deactivateTournament = async () => {
             });
 
         if (error) throw error;
-        console.log("✅ Tournament and host_name cleared");
+        console.log("✅ Tournament completely erased and session killed.");
         return { success: true };
     } catch (e: any) {
         console.error("❌ SYNC ERROR (deactivate):", e);

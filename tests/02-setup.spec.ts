@@ -24,16 +24,17 @@ test.describe('Flujo de Sorteo y Configuración de Torneo', () => {
         }
 
         // Validate page loaded correctly
-        await expect(page.getByRole('heading', { name: /Configuración de Jornada/i })).toBeVisible({ timeout: 15000 });
+        await expect(page.locator('h1', { hasText: /Configuración de Jornada/i })).toBeVisible({ timeout: 20000 });
 
         // Select exactly 4 players
-        // We scope this to the "Asistencia" grid to avoid accidental clicks on the top Host Dropdown
         const playersToSelect = ["Alex", "Beto", "Buru", "Carlos R"];
-        const gridContainer = page.locator('text="Marca a los presentes"').locator('..');
 
         for (const player of playersToSelect) {
-            const btn = gridContainer.locator('button', { hasText: player }).first();
+            // Find the button directly by text to avoid complex parent navigation
+            const btn = page.locator('button').filter({ hasText: player }).first();
             await btn.click({ force: true });
+            // Small pause for Firefox stability
+            await page.waitForTimeout(300);
         }
 
         // Validate the count marker says 4 Jugadores

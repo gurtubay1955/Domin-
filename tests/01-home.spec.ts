@@ -1,7 +1,14 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Flujo Inicial - Menú Principal V9 Titanium', () => {
-    test('La pantalla de inicio carga correctamente y muestra las opciones dinámicas V9', async ({ page }) => {
+    test.beforeEach(async ({ page }) => {
+        // Clear storage to avoid ghost hosts
+        await page.goto('/');
+        await page.evaluate(() => localStorage.clear());
+        await page.reload();
+    });
+
+    test('Carga la Home y navega a las opciones dinámicas V9', async ({ page }) => {
         // Navigate with NetworkIdle to wait for Next.js App Router hydration
         await page.goto('/', { waitUntil: 'networkidle' });
 
