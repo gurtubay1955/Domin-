@@ -76,3 +76,11 @@ backend_simulation.js
 diagnose_*.js
 sanity_check_db.js
 simulate_live_score.js
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+.env.test

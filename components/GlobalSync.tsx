@@ -127,8 +127,19 @@ export default function GlobalSync() {
 
                 // Detect reset: we have local tournament but cloud says null
                 if (res.activeId === null && currentId && isSetupComplete) {
-                    console.log("🔄 POLLING: Detected reset via polling!");
-                    handleSync(null);
+                    console.log("🔄 POLLING: Posible reset detectado. Aplicando Escudo Anti Stale-Read (V9.0)...");
+
+                    // V9.0: Doble confirmación diferida para evitar race conditions (Stale Read de Supabase Cache)
+                    setTimeout(async () => {
+                        const confirmRes = await getActiveTournamentId();
+                        // Verificamos si, habiendo esperado, SIGUE SIENDO NULL.
+                        if (confirmRes.success && confirmRes.activeId === null) {
+                            console.log("☢️ POLLING: Reset remoto CONFIRMADO. Ejecutando limpiador...");
+                            handleSync(null);
+                        } else {
+                            console.log("🛡️ POLLING: Falso positivo (Stale Read) asesinado gracias a TITANIUM V9.0.");
+                        }
+                    }, 1500); // Damos 1.5s asíncronos para que la red se estabilice
                 }
             }
         }, 5000); // Every 5 seconds

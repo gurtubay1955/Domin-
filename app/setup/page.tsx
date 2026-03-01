@@ -226,15 +226,16 @@ function SetupContent() {
                 return;
             }
 
-            // 3. Quantum Store Initialization (Local, with GUARANTEED pairUuidMap)
-            useTournamentStore.getState().initializeTournament(tId, finalHost, finalPairs, [], res.pairIds);
-
-            // 4. V4 MULTIPLAYER SYNC: Publish Global Signal
-            // This wakes up all other clients
+            // 3. V9.0.0 TITANIUM FIX: Publish Global Signal BEFORE local init
+            // This wakes up all other clients and sets the App State so polling doesn't fail
             const activeRes = await setActiveTournament(tId);
             if (!activeRes.success) {
-                alert("⚠️ Error al publicar Jornada. Revisa conexión.");
+                alert("⚠️ Error al publicar Jornada de cara a la red. Revisa conexión.");
             }
+
+            // 4. Quantum Store Initialization (Local State Hydration delayed)
+            // Se hace estricatamente DEPUES de que la nube confirmó el setup para evitar Local Stale Reads
+            useTournamentStore.getState().initializeTournament(tId, finalHost, finalPairs, [], res.pairIds);
 
             // 5. Fallback Cleanup (Just in case)
             localStorage.removeItem("activeMatch");
