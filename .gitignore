@@ -57,6 +57,9 @@ dist/
 node_modules/
 
 # --- ANTIGRAVITY IGNORES (LARGE FILES) ---
+Antigravity/
+Antigravity_backup/
+_Obsoletos/
 upgrade_tmp/
 Antigravity upgrade.tar.gz
 *.sql
@@ -84,3 +87,4 @@ simulate_live_score.js
 /playwright/.cache/
 /playwright/.auth/
 .env.test
+.env*.local
