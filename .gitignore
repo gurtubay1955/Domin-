@@ -66,6 +66,9 @@ Antigravity upgrade.tar.gz
 *.txt
 *.cjs
 *.mjs
+!postcss.config.mjs
+!eslint.config.mjs
+!next.config.mjs
 *.sh
 AI_Team/
 Versions/
